@@ -1,5 +1,10 @@
-# quick_dns.sh
-A Shell script written to quickly gather information about a certain domain, for the purpose of troubleshooting potential email issues.
+# quick_dns
+A script written to quickly gather email information about a certain domain. Supports the following **checks**:
++ Nameserver lookup and verification.
++ SPF lookup.
++ DMARC lookup.
++ MX-record lookup.
++ Barracuda RBL check against for the A-record of the domain (the hosting web server) and the MX-record(s).
 
 Sample output:
 ```
