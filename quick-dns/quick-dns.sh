@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# QUICK_INFO.sh
+# QUICK-DNS.sh
 : Description: Quickly obtain info about a domain, such as MX records, SPF, DMARC, RBL stats, and other info.
 : Author: Zachary Puhl
 : Contact: zpuhl@barracuda.com // postmaster@yeethop.xyz
 : Date: 05 March, 2019
-###############
+##############
 
 # Initial function declarations:
 function usage() {
