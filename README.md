@@ -7,18 +7,19 @@ Future implementations include the following translations of each Bash Shell scr
 + PowerShell
 + Perl
 + Python
++ JavaScript (ReactJS, interactive)
 
 # Ideas to Implement
 This section will host a checklist of script ideas for tools to add later, whether by suggestion, request, or brainstorming. Items are checked as the sub-project is considered in a "working" state, but of course even the checked projects will likely be revisited and updated as bugs are discovered.
 
-- [ ] _email-toolkit.sh_ - A "_master_" script to use all of the other tools below. This is just an idea right now but will help with creating a "library" file with lots of common routines/functions that I can source (`. misc/master.sh`) into other tools.
+- [ ] _email-toolkit_ - A "_master_" script to use all of the other tools below. This is just an idea right now but will help with creating a "library" file with lots of common routines/functions that I can source (`. misc/master.sh`) into other tools.
 
-- [X] _quick-dns.sh_ - Display quick information about a domain's email security/authentication standards in place, and provide a quick RBL check against the Barracuda RBL.
-- [ ] _spf-detail.sh_ - Return raw IPv4/6 ranges for a given domain using their SPF record, or perform a simulated SPF check with a given IP address and SMTP Envelope-From (_MAIL FROM_). Also, evaluate the general policy of the target domain's SPF record.
-- [ ] _dkim-verify.sh_ - DKIM verification script. Check for body-hash failures and header signature failures, among other checks.
-- [ ] _mime-check.sh_ - MIME header checker/analyzer. Checks for malformed MIME headers and also describes a raw email's MIME header formatting.
-- [ ] _received-trace.sh_ - Received headers analysis. Show the hops and time for each MTA that passed a message.
-- [ ] _test-ciphers.sh_ - Test the support cipher suites of a target server using OpenSSL. This can be helpful for diagnosing SMTP over TLS issues.
+- [X] _quick-dns_ - Display quick information about a domain's email security/authentication standards in place, and provide a quick RBL check against the Barracuda RBL.
+- [ ] _spf-detail_ - Return raw IPv4/6 ranges for a given domain using their SPF record, or perform a simulated SPF check with a given IP address and SMTP Envelope-From (_MAIL FROM_). Also, evaluate the general policy of the target domain's SPF record.
+- [ ] _dkim-verify_ - DKIM verification script. Check for body-hash failures and header signature failures, among other checks.
+- [ ] _mime-check_ - MIME header checker/analyzer. Checks for malformed MIME headers and also describes a raw email's MIME header formatting.
+- [ ] _received-trace_ - Received headers analysis. Show the hops and time for each MTA that passed a message. And yes, _exactly_ like the MXToolbox one but in a terminal.
+- [X] _test-ciphers_ - Test the support cipher suites of a target server using OpenSSL. This can be helpful for diagnosing SMTP over TLS issues.
 
 ## General Implementations (commonalities)
 Each script will need to follow a certain combined standard to meet the portability requirements across different versions of the same operating systems. Here's a list of standards to maintain/back-fill for each tool (can be expanded later as the project grows):
