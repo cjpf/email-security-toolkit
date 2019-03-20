@@ -17,6 +17,13 @@ function usage() {
   echo && exit 1
 }
 
+# cleanup
+# -- Clean up any temporary files with a trap.
+function cleanup() {
+  [ -f /tmp/dkim-verify-$$ ] && rm /tmp/dkim-verify-$$
+  [ -f /tmp/dkim-verify-$$-pubkey ] && rm /tmp/dkim-verify-$$-pubkey
+}
+
 # colors
 # -- Initialize terminal colors, if enabled.
 function colors() {
@@ -46,6 +53,15 @@ function initialize() {
 function errorOutput() {
   echo "${TC_BOLD}${TC_RED}ERROR${TC_NORMAL}: $1"
   exit $2
+}
+
+# outputResult
+# -- Predefine a template for indicating the PASS/FAIL state of a part of the signature.
+# PARAMS: 1 = Description, 2 = (0) PASS, (1) FAIL
+function outputResult() {
+  printf " ----- $1 [${TC_BOLD}"
+  [ $2 -eq 0 ] && printf "${TC_GREEN}PASS" || printf "${TC_RED}FAIL"
+  echo "${TC_NORMAL}]"
 }
 
 # extractSignature
@@ -122,7 +138,9 @@ function getEmailSections() {
     if [ -z "$HEADERS_PARSED" ]; then
       # Echo is used here rather than printf so it doesn't break...
       local TEMPVAR=$(echo "$line" | xxd -ps)
-      if [[ "$TEMPVAR" == "0d0a" || "$TEMPVAR" == "0a0d" ]]; then HEADERS_PARSED="TRUE"
+      # --- If the line is just a mixture of CR/LF then it's a blank line, begin BODY section.
+      # ----- Note that it can't be ONLY a CR, there must be at least one LF from the "echo" in TEMPVAR above.
+      if [[ "$TEMPVAR" == "0d0a" || "$TEMPVAR" == "0a0d" || "$TEMPVAR" == "0a" ]]; then HEADERS_PARSED="TRUE"
       else echo "$line">>/tmp/dkim-verify-$$; fi
     else
       echo "$line">>/tmp/dkim-verify-$$-body
@@ -130,9 +148,6 @@ function getEmailSections() {
   done
   EMAIL_HEADERS=$(cat /tmp/dkim-verify-$$)
   EMAIL_BODY=$(cat /tmp/dkim-verify-$$-body)
-#  echo "${TC_BLUE}EMAIL HEADERS${TC_NORMAL}:"
-#  echo "$EMAIL_HEADERS"
-#  echo -e "\n\n\n${TC_YELLOW}EMAIL BODY${TC_NORMAL}:\n${EMAIL_BODY}"
   rm /tmp/dkim-verify-$$ /tmp/dkim-verify-$$-body
 }
 
@@ -193,8 +208,6 @@ function canonicalizeHeader() {
     done
     CANON_HEADERS=$(cat $TEMP_OUT)
     rm $TEMP_OUT
-#echo -e "CH1:\n${CANON_HEADERS}"
-#echo "${CANON_HEADERS}" | xxd
 
     # Unfold all header field continuation lines as described in
     #  [RFC5322 S 2.2.3]; in particular, lines with terminators embedded in
@@ -206,25 +219,19 @@ function canonicalizeHeader() {
       |  sed -r 's/(0[aAdD]){2}((20)+|(09)+)+//g' >$TEMP_OUT
     CANON_HEADERS=$(echo -n `cat $TEMP_OUT` | perl -pe 's/([0-9a-fA-F]{2})/chr hex $1/gie')
 
-#echo -e "CH2:\n${CANON_HEADERS}"
-#echo "${CANON_HEADERS}" | xxd
-
     # Convert all sequences of one or more WSP characters to a single SP
     #  character.  WSP characters here include those before and after a
     #  line folding boundary.
     #  Delete all WSP characters at the end of each unfolded header field
     #  value.
     CANON_HEADERS=$(echo -n "${CANON_HEADERS}" | sed -r 's/(\s+|\t+)+/ /g')
-#echo -e "CH3:\n${CANON_HEADERS}"
-#echo "${CANON_HEADERS}" | xxd
     
     # Delete any WSP characters remaining before and after the colon
     #  separating the header field name from the header field value.  The
     #  colon separator MUST be retained.
     # -- Easy, find the first : character, seek and spaces or tabs out and nuke them.
-    echo -n "${CANON_HEADERS}" | sed -r 's/(\s|\t)*:(\s|\t)*/:/'
+    CANON_HEADERS=$(echo -n "${CANON_HEADERS}" | sed -r 's/(\s|\t)*:(\s|\t)*/:/')
 
-echo -e "\n${TC_CYAN}CANON_FINAL:\n${CANON_HEADERS}${TC_NORMAL}"
     rm $TEMP_OUT
   else
     # The given canonicalization header doesn't match either above. Default it. This shouldn't ever happen.
@@ -237,8 +244,27 @@ echo -e "\n${TC_CYAN}CANON_FINAL:\n${CANON_HEADERS}${TC_NORMAL}"
 function canonicalizeBody() {
   CANON_BODY=
   local TEMP_OUT=/tmp/dkim-verify-$$
-  if [[ "$DKIM_BODY_CANON" == "relaxed" ]]; then
-    echo
+  if [[ "$DKIM_CANON_BODY" == "relaxed" ]]; then
+    # RFC 6376, S 3.4.4: "relaxed" body canonicalization.
+    # Reduce whitespace:
+    #  (1) Ignore all whitespace at the end of each line. DO NOT remove the CRLF.
+    #  (2) Reduce all sequences of whitespace within a line to a single space character.
+
+    # ----- Rinse whitespace from the body. Output the sanitized hexdump of the EMAIL_BODY into TEMP_OUT.
+    echo -n "${EMAIL_BODY}" | sed -r 's/(\s+|\t+)+/ /g' | xxd -ps \
+      | tr -d '\n' | tr -d '\r' | tr -d ' ' >$TEMP_OUT
+    # ----- Replace and spaces leading up to a (CR)LF (line ending) with just the CRLF (line ending).
+    sed -r -i 's/(20)+((0d)?0a)/0d0a/g' $TEMP_OUT
+
+
+    # Ignore all empty lines at the end of the message body. Simply guarantee a CRLF at the end.
+    # ----- Append a CRLF to the end of the file.
+    printf "0d0a" >>$TEMP_OUT
+    # ----- Replace any trailing blank lines at the end of the file with a single CRLF.
+    sed -r -i 's/((0d)+|(0a)+)+$/0d0a/' $TEMP_OUT
+    # Initially was removing the first or leading CRLFs but the body extraction algo already does that for one CRLF.
+    #sed -r -i 's/^((0d)?0a)//' $TEMP_OUT
+
   else
     # Default to "simple".
     # RFC 6376, S 3.4.3
@@ -252,10 +278,46 @@ function canonicalizeBody() {
     echo -n "${EMAIL_BODY}" | xxd -ps | tr -d '\n' | tr -d '\r' | sed -r 's/\s+//g' >$TEMP_OUT
     printf "0d0a" >>$TEMP_OUT
     sed -r -i 's/((0d)+|(0a)+)+$/0d0a/' $TEMP_OUT
-    CANON_BODY=$(echo -n `cat $TEMP_OUT` | perl -pe 's/([0-9a-fA-F]{2})/chr hex $1/gie')
+    # Initially was removing the first or leading CRLFs but the body extraction algo already does that for one CRLF.
+    #sed -r -i 's/^((0d)?0a)//' $TEMP_OUT
+
   fi
+  CANON_BODY=$(echo `cat $TEMP_OUT` | perl -pe 's/([0-9a-fA-F]{2})/chr hex $1/gie')
+  CANON_BODY="${CANON_BODY}"`echo -ne "\r\n"`
+
   rm $TEMP_OUT
-  echo "BODY_CANON: $CANON_BODY"
+}
+
+# calcBodyHash
+# -- Calculate the body hash from the CANON_BODY variable.
+function calcBodyHash() {
+  CALC_BODY_HASH=
+  local TEMP_OUT=/tmp/dkim-verify-$$
+  echo -n "${CANON_BODY}" >$TEMP_OUT
+  
+  # Convert the canon. body to hex data, remove all line breaks, swap out repeating \n or \r with \r\n,
+  #   ensure final CRLF (\r\n), convert from hex back to ASCII, pipe into the hashing/digest algorithm, 
+  #   cut out unnecessary particles, convert the hex byte-for-byte to raw binary (ASCII) AGAIN, 
+  #   replace any possible \r or \n chars, and finally base64-encode the data. Body Hash complete.
+  # !!!!! The sed commands do no follow 2-character boundaries. This can lead to mistakenly overwriting valid hex!
+  local HASH_PART=$(getField "a")
+  if [[ "$HASH_PART" =~ 'sha256' ]]; then HASH_ALG="sha256sum"; else HASH_ALG="sha1sum"; fi
+  echo "  \`---> Hashing Algorithm: ${HASH_PART}"
+  CALC_BODY_HASH=$(LANG='' xxd -ps $TEMP_OUT | tr -d '\n' | tr -d '\r' | \
+    sed -r 's/((0d)?0a)/0d0a/g' | sed -r 's/(0d)+/0d/g' | sed -r 's/0d\s*$/0d0a/' | \
+    perl -pe 's/([0-9a-fA-F]{2})/chr hex $1/gie' | \
+    ${HASH_ALG} | cut -d' ' -f1 | \
+    perl -pe 's/([0-9a-fA-F]{2})/chr hex $1/gie' | \
+    tr -d '\n' | tr -d '\r' | \
+    base64)
+
+# Good for testing, so leaving it here.
+#LANG='' xxd -ps $TEMP_OUT | tr -d '\n' | tr -d '\r' | \
+#    sed -r 's/((0d)?0a)/0d0a/g' | sed -r 's/(0d)+/0d/g' | sed -r 's/0d\s*$/0d0a/' | \
+#    perl -pe 's/([0-9a-fA-F]{2})/chr hex $1/gie' | \
+#    xxd | less
+  
+  rm $TEMP_OUT
 }
 
 
@@ -267,6 +329,9 @@ function canonicalizeBody() {
 #########################################################
 # BEGIN MAIN FUNCTION:
 
+
+# Immediately set up the trap for the cleanup function on exit.
+trap cleanup EXIT
 
 # Initialize Colors
 colors
@@ -302,7 +367,6 @@ echo "${TC_GREEN}PUBKEY${TC_NORMAL}: ${SIGNER_PUBKEY}"
 
 # Split up the email into headers vs. body.
 getEmailSections
-echo "$EMAIL_HEADERS"
 
 
 # Get the Canonicalization type and canonicalize.
@@ -317,9 +381,14 @@ canonicalizeBody
 # Interpret the Body Hash.
 echo " +++ Interpreting and verifying the Body Hash (bh) field of the signature..."
 DKIM_BODYHASH=$(getField "bh")
-echo "BH: $DKIM_BODYHASH"
-COMPUTED_HASH=$(echo -n "${CANON_BODY}" | sha256sum | cut -d' ' -f1 | perl -pe 's/([0-9a-fA-F]{2})/chr hex $1/gie' | tr -d '\n' | tr -d '\r' | base64)
-echo "CH: $COMPUTED_HASH"
+calcBodyHash
+#echo "BH: $DKIM_BODYHASH"
+#echo "CH: ${CALC_BODY_HASH}"
+# Compare the two strings for a match and output the result to the terminal.
+[[ "$DKIM_BODYHASH" == "$CALC_BODY_HASH" ]]
+outputResult "Body Hash Match" $?
+
+
 
 # Successful exit.
 exit 0
