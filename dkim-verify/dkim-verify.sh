@@ -59,9 +59,15 @@ function errorOutput() {
 # -- Predefine a template for indicating the PASS/FAIL state of a part of the signature.
 # PARAMS: 1 = Description, 2 = (0) PASS, (1) FAIL
 function outputResult() {
-  printf " ----- $1 [${TC_BOLD}"
+  printf " ++++++ $1 [${TC_BOLD}"
   [ $2 -eq 0 ] && printf "${TC_GREEN}PASS" || printf "${TC_RED}FAIL"
   echo "${TC_NORMAL}]"
+}
+
+# outputInfo
+# -- Output the given info along the way during a calculation.
+function outputInfo() {
+  echo " +\`---> $1"
 }
 
 # extractSignature
@@ -250,20 +256,10 @@ function canonicalizeBody() {
     #  (1) Ignore all whitespace at the end of each line. DO NOT remove the CRLF.
     #  (2) Reduce all sequences of whitespace within a line to a single space character.
 
-    # ----- Rinse whitespace from the body. Output the sanitized hexdump of the EMAIL_BODY into TEMP_OUT.
-    echo -n "${EMAIL_BODY}" | sed -r 's/(\s+|\t+)+/ /g' | xxd -ps \
-      | tr -d '\n' | tr -d '\r' | tr -d ' ' >$TEMP_OUT
-    # ----- Replace and spaces leading up to a (CR)LF (line ending) with just the CRLF (line ending).
-    sed -r -i 's/(20)+((0d)?0a)/0d0a/g' $TEMP_OUT
-
-
-    # Ignore all empty lines at the end of the message body. Simply guarantee a CRLF at the end.
-    # ----- Append a CRLF to the end of the file.
-    printf "0d0a" >>$TEMP_OUT
-    # ----- Replace any trailing blank lines at the end of the file with a single CRLF.
-    sed -r -i 's/((0d)+|(0a)+)+$/0d0a/' $TEMP_OUT
-    # Initially was removing the first or leading CRLFs but the body extraction algo already does that for one CRLF.
-    #sed -r -i 's/^((0d)?0a)//' $TEMP_OUT
+    # Here's how the below operation does it:
+    echo "${EMAIL_BODY}" | xxd -ps -c1 | tr '\n' ' ' \
+      | sed -r 's/0d//gi' | sed -r 's/0a/0d0a/gi' | sed -r 's/((20|09)\s+)+/20/g' \
+      | sed -r 's/(20\s*)+(0d0a)/0d0a/g' | sed -r 's/(0d\s*0a\s*)+$/0d0a/' | tr -d ' ' >$TEMP_OUT
 
   else
     # Default to "simple".
@@ -275,14 +271,12 @@ function canonicalizeBody() {
     #  other changes to the message body.  In more formal terms, the
     #  "simple" body canonicalization algorithm converts "*CRLF" at the end
     #  of the body to a single "CRLF".
-    echo -n "${EMAIL_BODY}" | xxd -ps | tr -d '\n' | tr -d '\r' | sed -r 's/\s+//g' >$TEMP_OUT
-    printf "0d0a" >>$TEMP_OUT
+    echo "${EMAIL_BODY}" | xxd -c1 -ps | tr -d '\n' | tr -d '\r' >$TEMP_OUT
+    sed -r -i 's/(0d)//gi' $TEMP_OUT && sed -r -i 's/(0a)/0d0a/gi' $TEMP_OUT
     sed -r -i 's/((0d)+|(0a)+)+$/0d0a/' $TEMP_OUT
-    # Initially was removing the first or leading CRLFs but the body extraction algo already does that for one CRLF.
-    #sed -r -i 's/^((0d)?0a)//' $TEMP_OUT
 
   fi
-  CANON_BODY=$(echo `cat $TEMP_OUT` | perl -pe 's/([0-9a-fA-F]{2})/chr hex $1/gie')
+  CANON_BODY=$(LANG='' echo `cat $TEMP_OUT` | perl -pe 's/([0-9a-fA-F]{2})/chr hex $1/gie')
   CANON_BODY="${CANON_BODY}"`echo -ne "\r\n"`
 
   rm $TEMP_OUT
@@ -294,7 +288,7 @@ function calcBodyHash() {
   CALC_BODY_HASH=
   local TEMP_OUT=/tmp/dkim-verify-$$
   echo -n "${CANON_BODY}" >$TEMP_OUT
-  
+
   # Convert the canon. body to hex data, remove all line breaks, swap out repeating \n or \r with \r\n,
   #   ensure final CRLF (\r\n), convert from hex back to ASCII, pipe into the hashing/digest algorithm, 
   #   cut out unnecessary particles, convert the hex byte-for-byte to raw binary (ASCII) AGAIN, 
@@ -302,20 +296,22 @@ function calcBodyHash() {
   # !!!!! The sed commands do no follow 2-character boundaries. This can lead to mistakenly overwriting valid hex!
   local HASH_PART=$(getField "a")
   if [[ "$HASH_PART" =~ 'sha256' ]]; then HASH_ALG="sha256sum"; else HASH_ALG="sha1sum"; fi
-  echo "  \`---> Hashing Algorithm: ${HASH_PART}"
+  echo " +\`---> Hashing Algorithm: ${HASH_PART}"
+  # Making a change to this. It should eventually JUST hash, not do anything else.
+  # Removed from beginning of second line: sed -r 's/((0d)?0a)/0d0a/g' | 
   CALC_BODY_HASH=$(LANG='' xxd -ps $TEMP_OUT | tr -d '\n' | tr -d '\r' | \
-    sed -r 's/((0d)?0a)/0d0a/g' | sed -r 's/(0d)+/0d/g' | sed -r 's/0d\s*$/0d0a/' | \
+    sed -r 's/(0d)+/0d/g' | sed -r 's/0d\s*$/0d0a/' | \
     perl -pe 's/([0-9a-fA-F]{2})/chr hex $1/gie' | \
     ${HASH_ALG} | cut -d' ' -f1 | \
     perl -pe 's/([0-9a-fA-F]{2})/chr hex $1/gie' | \
     tr -d '\n' | tr -d '\r' | \
     base64)
 
-# Good for testing, so leaving it here.
-#LANG='' xxd -ps $TEMP_OUT | tr -d '\n' | tr -d '\r' | \
-#    sed -r 's/((0d)?0a)/0d0a/g' | sed -r 's/(0d)+/0d/g' | sed -r 's/0d\s*$/0d0a/' | \
-#    perl -pe 's/([0-9a-fA-F]{2})/chr hex $1/gie' | \
-#    xxd | less
+  # Good for testing, so leaving it here.
+  #LANG='' xxd -ps $TEMP_OUT | tr -d '\n' | tr -d '\r' | \
+  # sed -r 's/(0d)+/0d/g' | sed -r 's/0d\s*$/0d0a/' | \
+  # perl -pe 's/([0-9a-fA-F]{2})/chr hex $1/gie' | \
+  # xxd | less
   
   rm $TEMP_OUT
 }
@@ -382,8 +378,8 @@ canonicalizeBody
 echo " +++ Interpreting and verifying the Body Hash (bh) field of the signature..."
 DKIM_BODYHASH=$(getField "bh")
 calcBodyHash
-#echo "BH: $DKIM_BODYHASH"
-#echo "CH: ${CALC_BODY_HASH}"
+outputInfo "Extracted Body Hash:  ${DKIM_BODYHASH}"
+outputInfo "Calculated Body Hash: ${CALC_BODY_HASH}"
 # Compare the two strings for a match and output the result to the terminal.
 [[ "$DKIM_BODYHASH" == "$CALC_BODY_HASH" ]]
 outputResult "Body Hash Match" $?
