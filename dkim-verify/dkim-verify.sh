@@ -44,7 +44,7 @@ function colors() {
 function initialize() {
   DKIM_SIGNATURE=;EMAIL_FILE=;
   EMAIL_HEADERS=;EMAIL_BODY=;
-  SIGNER_PUBKEY=;
+  SIGNER_PUBKEY=;PUBKEY_FILE=/tmp/dkim-verify-$$-pubkey
 }
 
 # errorOutput
@@ -59,7 +59,7 @@ function errorOutput() {
 # -- Predefine a template for indicating the PASS/FAIL state of a part of the signature.
 # PARAMS: 1 = Description, 2 = (0) PASS, (1) FAIL
 function outputResult() {
-  printf " ++++++ $1 [${TC_BOLD}"
+  printf " +===== $1 [${TC_BOLD}"
   [ $2 -eq 0 ] && printf "${TC_GREEN}PASS" || printf "${TC_RED}FAIL"
   echo "${TC_NORMAL}]"
 }
@@ -100,6 +100,7 @@ function extractSignature() {
   [ -z "$DKIM_SIGNATURE" ] && return 1
   # Output the clean version of the Signature, then crunch it before leaving.
   echo "${DKIM_SIGNATURE}"
+  DKIM_SIGNATURE_SIMPLE="${DKIM_SIGNATURE}"
   DKIM_SIGNATURE=$(echo "${DKIM_SIGNATURE}" | tr '\n' ' ' | sed -r 's/\s+|\t+//g')
   return 0
 }
@@ -114,7 +115,7 @@ function getField() {
   # DKIM Signature not defined? Leave with null response.
   [ -z "$DKIM_SIGNATURE" ] && return 0
 
-  RETVAL=$(echo "$DKIM_SIGNATURE" | grep -Poi "$1"'=.*?(;|$)' | sed -r 's/;//g')
+  RETVAL=$(echo "$DKIM_SIGNATURE" | grep -Poi '\b'"$1"'=.*?(;|$)' | sed -r 's/;.*//g' | head -n1)
   echo "${RETVAL:`expr ${#1} + 1`:`echo ${#RETVAL}`}"
 }
 
@@ -132,6 +133,18 @@ function getPubkey() {
 
   # All is good! Strip off any possible semi-colons (especially at the end and rip off the 'p=' via substring.
   SIGNER_PUBKEY=$(echo "${SIGNER_PUBKEY:2:`echo ${#SIGNER_PUBKEY}`}" | sed -r 's/;//g')
+
+  # Verify that the public key is valid.
+  echo "-----BEGIN PUBLIC KEY-----">${PUBKEY_FILE}
+  echo "${SIGNER_PUBKEY}">>${PUBKEY_FILE}
+  echo "-----END PUBLIC KEY-----">>${PUBKEY_FILE}
+
+  # Use OpenSSL to check for a valid RSA modulus.
+  # -- If the return code from OpenSSL is anything but 0, it's not valid.
+  openssl rsa -pubin -in ${PUBKEY_FILE} -text -noout 2>&1 >/dev/null
+  [ $? -ne 0 ] && echo "BAD KEY!!!!!!!!!!!!!" && return 3
+
+  # Successful return.
   return 0
 }
 
@@ -204,7 +217,7 @@ function canonicalizeHeader() {
     while read -r line || [[ -n "$line" ]]; do
       local HEADER=$(echo "$line" | cut -d':' -f1 | tr '[:upper:]' '[:lower:]')
       local CUT_TEST=$(echo "$line" | cut -d':' -f2 | tr '[:upper:]' '[:lower:]')
-      if [[ "${HEADER}" == "${CUT_TEST}" ]]; then
+      if [[ "${HEADER}" == "${CUT_TEST}" || -n `echo "${line}" | grep -Poi '^(\s+|\t+)+.'` ]]; then
         echo -ne "${line}\r\n" >>$TEMP_OUT
         continue
       fi
@@ -221,8 +234,8 @@ function canonicalizeHeader() {
     #  WSP) MUST be interpreted without the CRLF.  Implementations MUST
     #  NOT remove the CRLF at the end of the header field value.
     # -- I'm going to try a slightly different approach to this, rather than intensive scanning.
-    echo -n "${CANON_HEADERS}" | xxd -ps | tr '\n' ' ' | sed -r 's/\s+//g' | sed -r 's/(0d)+/0d/g' | sed -r 's/(0a)+/0a/g' \
-      |  sed -r 's/(0[aAdD]){2}((20)+|(09)+)+//g' >$TEMP_OUT
+    echo -n "${CANON_HEADERS}" | xxd -ps | tr '\n' ' ' | tr -d ' ' | sed -r 's/(0d)+/0d/g' | sed -r 's/(0a)+/0a/g' \
+      |  sed -r 's/(0[aAdD]){2}((20)+|(09)+)+/20/g' >$TEMP_OUT
     CANON_HEADERS=$(echo -n `cat $TEMP_OUT` | perl -pe 's/([0-9a-fA-F]{2})/chr hex $1/gie')
 
     # Convert all sequences of one or more WSP characters to a single SP
@@ -231,7 +244,7 @@ function canonicalizeHeader() {
     #  Delete all WSP characters at the end of each unfolded header field
     #  value.
     CANON_HEADERS=$(echo -n "${CANON_HEADERS}" | sed -r 's/(\s+|\t+)+/ /g')
-    
+
     # Delete any WSP characters remaining before and after the colon
     #  separating the header field name from the header field value.  The
     #  colon separator MUST be retained.
@@ -257,6 +270,10 @@ function canonicalizeBody() {
     #  (2) Reduce all sequences of whitespace within a line to a single space character.
 
     # Here's how the below operation does it:
+    # echo EMAIL_BODY (with trailing CRLF) | break the EMAIL_BODY into a hex-dump where each by is a SINGLE column
+    # | replace LF w/ space (turns column into a space-separated list of bytes) | remove all CR characters (0x0D)
+    # | replace and LF (0x0A) characters with CRLF (0x0D0A) | replace any consecutive WSP (0x20 & 0x09) w/ a single space.
+    # | remove any spaces leading up to a CRLF | mash all terminating CR & LF characters into a single CRLF.
     echo "${EMAIL_BODY}" | xxd -ps -c1 | tr '\n' ' ' \
       | sed -r 's/0d//gi' | sed -r 's/0a/0d0a/gi' | sed -r 's/((20|09)\s+)+/20/g' \
       | sed -r 's/(20\s*)+(0d0a)/0d0a/g' | sed -r 's/(0d\s*0a\s*)+$/0d0a/' | tr -d ' ' >$TEMP_OUT
@@ -270,12 +287,15 @@ function canonicalizeBody() {
     #  no trailing CRLF on the message body, a CRLF is added.  It makes no
     #  other changes to the message body.  In more formal terms, the
     #  "simple" body canonicalization algorithm converts "*CRLF" at the end
-    #  of the body to a single "CRLF".
+    #  of the body to a single "CRLF".i
+
+    # Operates the same as "relaxed" but isn't crunching whitespace.
     echo "${EMAIL_BODY}" | xxd -c1 -ps | tr -d '\n' | tr -d '\r' >$TEMP_OUT
     sed -r -i 's/(0d)//gi' $TEMP_OUT && sed -r -i 's/(0a)/0d0a/gi' $TEMP_OUT
     sed -r -i 's/((0d)+|(0a)+)+$/0d0a/' $TEMP_OUT
 
   fi
+
   CANON_BODY=$(LANG='' echo `cat $TEMP_OUT` | perl -pe 's/([0-9a-fA-F]{2})/chr hex $1/gie')
   CANON_BODY="${CANON_BODY}"`echo -ne "\r\n"`
 
@@ -290,29 +310,25 @@ function calcBodyHash() {
   echo -n "${CANON_BODY}" >$TEMP_OUT
 
   # Convert the canon. body to hex data, remove all line breaks, swap out repeating \n or \r with \r\n,
-  #   ensure final CRLF (\r\n), convert from hex back to ASCII, pipe into the hashing/digest algorithm, 
-  #   cut out unnecessary particles, convert the hex byte-for-byte to raw binary (ASCII) AGAIN, 
+  #   ensure final CRLF (\r\n), convert from hex back to ASCII, pipe into the hashing/digest algorithm,
+  #   cut out unnecessary particles, convert the hex byte-for-byte to raw binary (ASCII) AGAIN,
   #   replace any possible \r or \n chars, and finally base64-encode the data. Body Hash complete.
-  # !!!!! The sed commands do no follow 2-character boundaries. This can lead to mistakenly overwriting valid hex!
   local HASH_PART=$(getField "a")
-  if [[ "$HASH_PART" =~ 'sha256' ]]; then HASH_ALG="sha256sum"; else HASH_ALG="sha1sum"; fi
+  if [[ "$HASH_PART" =~ 'sha256' ]]; then HASH_ALG="sha256"; else HASH_ALG="sha1"; fi
   echo " +\`---> Hashing Algorithm: ${HASH_PART}"
   # Making a change to this. It should eventually JUST hash, not do anything else.
-  # Removed from beginning of second line: sed -r 's/((0d)?0a)/0d0a/g' | 
+  # -- Added the OpenSSL hashing function to stop converting back-and-forth with perl.
   CALC_BODY_HASH=$(LANG='' xxd -ps $TEMP_OUT | tr -d '\n' | tr -d '\r' | \
     sed -r 's/(0d)+/0d/g' | sed -r 's/0d\s*$/0d0a/' | \
     perl -pe 's/([0-9a-fA-F]{2})/chr hex $1/gie' | \
-    ${HASH_ALG} | cut -d' ' -f1 | \
-    perl -pe 's/([0-9a-fA-F]{2})/chr hex $1/gie' | \
-    tr -d '\n' | tr -d '\r' | \
-    base64)
+    2>/dev/null openssl ${HASH_ALG} -binary | base64)
 
   # Good for testing, so leaving it here.
   #LANG='' xxd -ps $TEMP_OUT | tr -d '\n' | tr -d '\r' | \
   # sed -r 's/(0d)+/0d/g' | sed -r 's/0d\s*$/0d0a/' | \
   # perl -pe 's/([0-9a-fA-F]{2})/chr hex $1/gie' | \
   # xxd | less
-  
+
   rm $TEMP_OUT
 }
 
@@ -352,13 +368,19 @@ extractSignature "${EMAIL_FILE}"
 echo " +++ Acquiring the public RSA key used to sign the header."
 DKIM_SELECTOR=$(getField "s")
 DKIM_DOMAIN=$(getField "d")
-getPubkey "$DKIM_SELECTOR" "$DKIM_DOMAIN"
-if [ $? -eq 1 ]; then
-  errorOutput "Failed to find public key for selector \"${DKIM_SELECTOR}\" at domain \"${DKIM_DOMAIN}\"." 3
-elif [ $? -eq 2 ]; then
-  errorOutput "Found TXT record, but no public key (p=), for selector \"${DKIM_SELECTOR}\" at domain \"${DKIM_DOMAIN}\"." 3
+VALID_PUBKEY=0
+getPubkey "$DKIM_SELECTOR" "$DKIM_DOMAIN" 2>&1 >/dev/null
+# Use the retcode now AND later when using the signature on the canon. headers
+PUBKEY_RETCODE=$?
+if [ "$PUBKEY_RETCODE" -eq 1 ]; then
+  errorOutput "${TC_RED}TEMPFAIL${TC_NORMAL}: Failed to find public key for selector \"${DKIM_SELECTOR}\" at domain \"${DKIM_DOMAIN}\"." 3
+elif [ "$PUBKEY_RETCODE" -eq 2 ]; then
+  errorOutput "${TC_RED}TEMPFAIL${TC_NORMAL}: Found TXT record, but no public key (p=), for selector \"${DKIM_SELECTOR}\" at domain \"${DKIM_DOMAIN}\"." 3
+elif [ "$PUBKEY_RETCODE" -eq 3 ]; then
+  errorOutput "${TC_RED}TEMPFAIL${TC_NORMAL}: Found pubkey in selector record, but it is not a valid RSA key encoded in Base64." 3
 fi
-echo "${TC_GREEN}PUBKEY${TC_NORMAL}: ${SIGNER_PUBKEY}"
+# This is here like this in case I change the 'if' above AGAIN.
+outputResult "Public Key Valid" "${VALID_PUBKEY}"
 
 
 # Split up the email into headers vs. body.
@@ -368,23 +390,104 @@ getEmailSections
 # Get the Canonicalization type and canonicalize.
 echo " +++ Getting the canonicalization types and performing canonicalization..."
 getSigCanon
-echo "${TC_CYAN}CANONICALIZATION${TC_NORMAL}: ${DKIM_CANON_HEADER} (header)/${DKIM_CANON_BODY} (body)"
+outputInfo "Canonicalization Used: ${DKIM_CANON_HEADER} (header)/${DKIM_CANON_BODY} (body)"
 # Set up the CANON_HEADERS and CANON_BODY variables.
+outputInfo "Sanitizing and parsing message header."
 canonicalizeHeader
+outputInfo "Sanitizing and parsing message body."
 canonicalizeBody
+[[ -z "$CANON_BODY" || -z "$CANON_HEADERS" ]] && errorOutput "Could not canonicalize the message. Reason unknown." 4
+outputResult "Headers & Body Canonicalized" 0
 
 
 # Interpret the Body Hash.
 echo " +++ Interpreting and verifying the Body Hash (bh) field of the signature..."
 DKIM_BODYHASH=$(getField "bh")
 calcBodyHash
-outputInfo "Extracted Body Hash:  ${DKIM_BODYHASH}"
-outputInfo "Calculated Body Hash: ${CALC_BODY_HASH}"
+outputInfo "Extracted Body Hash:  ${TC_YELLOW}${DKIM_BODYHASH}${TC_NORMAL}"
+outputInfo "Calculated Body Hash: ${TC_YELLOW}${CALC_BODY_HASH}${TC_NORMAL}"
 # Compare the two strings for a match and output the result to the terminal.
-[[ "$DKIM_BODYHASH" == "$CALC_BODY_HASH" ]]
-outputResult "Body Hash Match" $?
+# -- RFC standard is to PERMFAIL if the Body Hash doesn't verify, because the Body Hash is used in the next step.
+if [[ "$DKIM_BODYHASH" == "$CALC_BODY_HASH" ]]; then
+  outputResult "Body Hash Match" 0
+else
+  errorOutput "${TC_RED}PERMFAIL${TC_NORMAL}: The Body Hash did not verify successfully. Signature is not valid!" 5
+fi
+
+
+# Gather information about the header signing.
+echo " +++ Verifying primary DKIM signature (b) with the public key..."
+DKIM_HEADER_SIGNATURE=$(getField "b")
+TEMP_OUT="/tmp/dkim-verify-$$"
+# Decode the Base64 signature.
+echo "$DKIM_HEADER_SIGNATURE" | base64 -di >$TEMP_OUT
+# Multipart step:
+# - Decrypt the hash with OpenSSL's RSA utility.
+# - Get the final two lines, cut at the '-' symbols and get fields 2&3.
+# - Use sed to (1) delete 2+ spaces and the content following it, (2) remove spaces and dashes.
+# - Delete all newline characters to aggregate the hexdump into one string.
+DKIM_HEADER_HASH=$(openssl rsautl -inkey ${PUBKEY_FILE} -pubin -in ${TEMP_OUT} -asn1parse | tail -2 | cut -d'-' -f2,3 \
+  | sed -r 's/\s{2,}.*?$//g' | sed -r 's/(\s|-)//g' | tr -d '\n')
+
+
+echo " +++ Calculating header hash locally..."
+# Test the extracted hash (decrypted w/ public key above) against the headers.
+DKIM_SIGNED_HEADERS=$(getField "h" |tr ':' ' ' | sed -r 's/\s+/ /g')
+DKIM_SIGNED_HEADERS_TEST=$(echo "$DKIM_SIGNED_HEADERS" | tr '[:upper:]' '[:lower:]')
+# Make sure the headers contain SOMETHING besides whitespace.
+[ -z "$DKIM_SIGNED_HEADERS" ] && errorOutput "The \"h\" field is empty, there is nothing to sign! This goes against RFC 6367. Aborting..."
+if ! [[ "$DKIM_SIGNED_HEADERS_TEST" == *"from"* ]]; then
+  errorOutput "${TC_RED}PERMFAIL${TC_NORMAL}: The \"h\" field does not contain the From header as required by RFC 6367. Signature is not valid!"
+fi
+
+# Reverse the header order.
+echo "$CANON_HEADERS" >tempfile
+CANON_HEADERS=$(cat tempfile | perl -e 'print reverse <>')
+echo "$CANON_HEADERS" >tempfile
+# Scan from oldest header to newest (purpose of the reversal), and once a matching header is found, strip the line out.
+#    No match on a header equals no entry into the FINAL_HEADER_CANON variable.
+FINAL_HEADER_CANON=""
+DKIM_SIGNED_HEADERS_TEST="${DKIM_SIGNED_HEADERS_TEST} dkim-signaturelast"
+rm tempfile_gen
+IFS=' '
+for header in ${DKIM_SIGNED_HEADERS_TEST[@]}; do
+#  echo "LOOKUP: $header"
+  if [[ "$header" == "dkim-signaturelast" ]]; then
+    if [[ "$DKIM_CANON_HEADER" == "relaxed" ]]; then
+      ADD_N_STRIP=$(grep -Poi '^dkim-signature:.*?$' tempfile | tail -1)
+    else
+      # This is dangerous! It assumes that the "b" field is isolated to its own line and is the last value in the signature!
+      INDENTATION_CHAR=$(echo "$DKIM_SIGNATURE_SIMPLE" | grep -Poi -m1 '^(\s|\t)+.' | sed -r 's/.$//')
+      ADD_N_STRIP=$(echo "$DKIM_SIGNATURE_SIMPLE" | sed -n '/\bb=/q;p')
+      ADD_N_STRIP="${ADD_N_STRIP}\n${INDENTATION_CHAR}b="
+    fi
+  else ADD_N_STRIP=$(grep -Poi -m1 '^'"${header}"':.*?$' tempfile); fi
+  [ -z "$ADD_N_STRIP" ] && continue
+  sed -ri '/^'"${header}"':/d' tempfile
+  if [[ "$header" == "dkim-signature"* ]]; then ADD_N_STRIP=$(echo "${ADD_N_STRIP}" | sed -r 's/\bb=.*?($|;)/b=/'); fi
+#  echo "FOUND:$ADD_N_STRIP"
+  echo -ne "${ADD_N_STRIP}\r\n" >>tempfile_gen
+done
+
+sed -ri 's/\s+$//g' tempfile_gen
+unix2dos --quiet tempfile_gen 2>&1 >/dev/null
+truncate -s -2 tempfile_gen
+CALC_HEADER_HASH=$(`echo ${HASH_ALG}`sum tempfile_gen | cut -d' ' -f1)
+rm tempfile*
+
+# Output results.
+outputInfo "Extracted Header Hash:  ${TC_CYAN}${DKIM_HEADER_HASH}${TC_NORMAL}"
+outputInfo "Calculated Header Hash: ${TC_CYAN}${CALC_HEADER_HASH}${TC_NORMAL}"
+# Compare the two strings for a match and output the result to the terminal.
+# -- RFC standard is to PERMFAIL if the Hash doesn't verify; it's the primary signature.
+if [[ "$DKIM_HEADER_HASH" == "$CALC_HEADER_HASH" ]]; then
+  outputResult "Header Hash Match" 0
+else
+  errorOutput "${TC_RED}PERMFAIL${TC_NORMAL}: The Header Hash did not verify successfully. Signature is not valid!" 5
+fi
 
 
 
 # Successful exit.
+echo && echo "[${TC_BOLD}${TC_GREEN}SUCCESS${TC_NORMAL}] DKIM Signature is ${TC_GREEN}${TC_BOLD}VALID${TC_NORMAL}!"
 exit 0
