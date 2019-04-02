@@ -3,7 +3,8 @@ Verify the most recent DKIM Signature on an email and check for possible points 
 
 ## TODO
 + [X] Finish the tool.
-+ [ ] Add **dependency checks** for the tools used, and issue a notice that they're _REQUIRED_ before running the tool.
++ [ ] Better script commentation.
++ [X] Add **dependency checks** for the tools used, and issue a notice that they're _REQUIRED_ before running the tool.
 + [ ] Add special-case interpretations, in close accordance with RFC 6367 (such as the **l** body length limit).
 
 

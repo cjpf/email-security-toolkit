@@ -40,11 +40,25 @@ function colors() {
 }
 
 # initialize
-# -- Set up the script environment. Mainly used to ensure variables are clean.
+# -- Set up the script environment. Mainly used to ensure dependencies are installed.
 function initialize() {
-  DKIM_SIGNATURE=;EMAIL_FILE=;
-  EMAIL_HEADERS=;EMAIL_BODY=;
-  SIGNER_PUBKEY=;PUBKEY_FILE=/tmp/dkim-verify-$$-pubkey
+  # Initialize/Blank some variables as needed.
+  PUBKEY_FILE=/tmp/dkim-verify-$$-pubkey
+  DKIM_SIGNATURE=;EMAIL_FILE=;EMAIL_HEADERS=;EMAIL_BODY=;
+  
+  # Build a space-separated list of dependencies for this script.
+  DEPENDENCIES="perl unix2dos openssl base64 dig xxd tr sed sha1sum sha256sum head tail cut truncate"
+  # Let the user know
+  echo "Checking for necessary dependencies: ${TC_BLUE}${DEPENDENCIES}${TC_NORMAL}"
+  # Set the separator/delimiter to ' '
+  IFS=' '
+  # Iterate through each command above and check for its existence in the $PATH variable using the 'command' command.
+  for needed in ${DEPENDENCIES[@]}; do
+    command -v $needed 2>&1 >/dev/null
+    if [ $? -ne 0 ]; then
+      errorOutput "Missing dependency command \"${needed}\". Please install this on your local machine and try again." 255
+    fi
+  done
 }
 
 # errorOutput
@@ -244,7 +258,7 @@ function canonicalizeHeader() {
     #  Delete all WSP characters at the end of each unfolded header field
     #  value.
     CANON_HEADERS=$(echo -n "${CANON_HEADERS}" | sed -r 's/(\s+|\t+)+/ /g')
-
+    
     # Delete any WSP characters remaining before and after the colon
     #  separating the header field name from the header field value.  The
     #  colon separator MUST be retained.
@@ -310,8 +324,8 @@ function calcBodyHash() {
   echo -n "${CANON_BODY}" >$TEMP_OUT
 
   # Convert the canon. body to hex data, remove all line breaks, swap out repeating \n or \r with \r\n,
-  #   ensure final CRLF (\r\n), convert from hex back to ASCII, pipe into the hashing/digest algorithm,
-  #   cut out unnecessary particles, convert the hex byte-for-byte to raw binary (ASCII) AGAIN,
+  #   ensure final CRLF (\r\n), convert from hex back to ASCII, pipe into the hashing/digest algorithm, 
+  #   cut out unnecessary particles, convert the hex byte-for-byte to raw binary (ASCII) AGAIN, 
   #   replace any possible \r or \n chars, and finally base64-encode the data. Body Hash complete.
   local HASH_PART=$(getField "a")
   if [[ "$HASH_PART" =~ 'sha256' ]]; then HASH_ALG="sha256"; else HASH_ALG="sha1"; fi
@@ -322,13 +336,13 @@ function calcBodyHash() {
     sed -r 's/(0d)+/0d/g' | sed -r 's/0d\s*$/0d0a/' | \
     perl -pe 's/([0-9a-fA-F]{2})/chr hex $1/gie' | \
     2>/dev/null openssl ${HASH_ALG} -binary | base64)
-
+    
   # Good for testing, so leaving it here.
   #LANG='' xxd -ps $TEMP_OUT | tr -d '\n' | tr -d '\r' | \
   # sed -r 's/(0d)+/0d/g' | sed -r 's/0d\s*$/0d0a/' | \
   # perl -pe 's/([0-9a-fA-F]{2})/chr hex $1/gie' | \
   # xxd | less
-
+  
   rm $TEMP_OUT
 }
 
@@ -441,39 +455,37 @@ if ! [[ "$DKIM_SIGNED_HEADERS_TEST" == *"from"* ]]; then
 fi
 
 # Reverse the header order.
-echo "$CANON_HEADERS" >tempfile
-CANON_HEADERS=$(cat tempfile | perl -e 'print reverse <>')
-echo "$CANON_HEADERS" >tempfile
+echo "$CANON_HEADERS" >/tmp/tempfile
+CANON_HEADERS=$(cat /tmp/tempfile | perl -e 'print reverse <>')
+echo "$CANON_HEADERS" >/tmp/tempfile
 # Scan from oldest header to newest (purpose of the reversal), and once a matching header is found, strip the line out.
 #    No match on a header equals no entry into the FINAL_HEADER_CANON variable.
 FINAL_HEADER_CANON=""
 DKIM_SIGNED_HEADERS_TEST="${DKIM_SIGNED_HEADERS_TEST} dkim-signaturelast"
-rm tempfile_gen
 IFS=' '
 for header in ${DKIM_SIGNED_HEADERS_TEST[@]}; do
 #  echo "LOOKUP: $header"
   if [[ "$header" == "dkim-signaturelast" ]]; then
     if [[ "$DKIM_CANON_HEADER" == "relaxed" ]]; then
-      ADD_N_STRIP=$(grep -Poi '^dkim-signature:.*?$' tempfile | tail -1)
+      ADD_N_STRIP=$(grep -Poi '^dkim-signature:.*?$' /tmp/tempfile | tail -1)
     else
       # This is dangerous! It assumes that the "b" field is isolated to its own line and is the last value in the signature!
       INDENTATION_CHAR=$(echo "$DKIM_SIGNATURE_SIMPLE" | grep -Poi -m1 '^(\s|\t)+.' | sed -r 's/.$//')
       ADD_N_STRIP=$(echo "$DKIM_SIGNATURE_SIMPLE" | sed -n '/\bb=/q;p')
       ADD_N_STRIP="${ADD_N_STRIP}\n${INDENTATION_CHAR}b="
     fi
-  else ADD_N_STRIP=$(grep -Poi -m1 '^'"${header}"':.*?$' tempfile); fi
+  else ADD_N_STRIP=$(grep -Poi -m1 '^'"${header}"':.*?$' /tmp/tempfile); fi
   [ -z "$ADD_N_STRIP" ] && continue
-  sed -ri '/^'"${header}"':/d' tempfile
+  sed -ri '/^'"${header}"':/d' /tmp/tempfile
   if [[ "$header" == "dkim-signature"* ]]; then ADD_N_STRIP=$(echo "${ADD_N_STRIP}" | sed -r 's/\bb=.*?($|;)/b=/'); fi
-#  echo "FOUND:$ADD_N_STRIP"
-  echo -ne "${ADD_N_STRIP}\r\n" >>tempfile_gen
+  echo -ne "${ADD_N_STRIP}\r\n" >>/tmp/tempfile_gen
 done
 
-sed -ri 's/\s+$//g' tempfile_gen
-unix2dos --quiet tempfile_gen 2>&1 >/dev/null
-truncate -s -2 tempfile_gen
-CALC_HEADER_HASH=$(`echo ${HASH_ALG}`sum tempfile_gen | cut -d' ' -f1)
-rm tempfile*
+sed -ri 's/\s+$//g' /tmp/tempfile_gen
+unix2dos --quiet /tmp/tempfile_gen 2>&1 >/dev/null
+truncate -s -2 /tmp/tempfile_gen
+CALC_HEADER_HASH=$(`echo ${HASH_ALG}`sum /tmp/tempfile_gen | cut -d' ' -f1)
+rm /tmp/tempfile*
 
 # Output results.
 outputInfo "Extracted Header Hash:  ${TC_CYAN}${DKIM_HEADER_HASH}${TC_NORMAL}"
