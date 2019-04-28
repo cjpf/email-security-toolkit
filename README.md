@@ -16,7 +16,7 @@ This section will host a checklist of script ideas for tools to add later, wheth
 
 - [X] _quick-dns_ - Display quick information about a domain's email security/authentication standards in place, and provide a quick RBL check against the Barracuda RBL.
 - [ ] _spf-detail_ - Return raw IPv4/6 ranges for a given domain using their SPF record, or perform a simulated SPF check with a given IP address and SMTP Envelope-From (_MAIL FROM_). Also, evaluate the general policy of the target domain's SPF record.
-- [ ] _dkim-verify_ - DKIM verification script. Check for body-hash failures and header signature failures, among other checks.
+- [X] _dkim-verify_ - DKIM verification script. Check for body-hash failures and header signature failures, among other checks.
 - [ ] _mime-check_ - MIME header checker/analyzer. Checks for malformed MIME headers and also describes a raw email's MIME header formatting.
 - [ ] _received-trace_ - Received headers analysis. Show the hops and time for each MTA that passed a message. And yes, _exactly_ like the MXToolbox one but in a terminal.
 - [X] _test-ciphers_ - Test the support cipher suites of a target server using OpenSSL. This can be helpful for diagnosing SMTP over TLS issues.

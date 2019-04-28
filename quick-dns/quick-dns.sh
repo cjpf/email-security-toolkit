@@ -146,9 +146,9 @@ function getNameServers() {
 ## to tell the user of the script if there are multiple SPF records.
 function getSPF() {
     SPF_RECORD=$(dig txt ${DEFAULT_OPTIONS} +short ${DOMAIN} @${NAME_SERVER})
-    [ -z "$SPF_RECORD" ] && SPF_RECORD="NONE"
     (checkFallbackLookup "$SPF_RECORD") || SPF_RECORD=$(fallbackLookup "${DOMAIN}" "txt" "1.1.1.1")
     SPF_RECORD=$(echo "${SPF_RECORD}" | grep -i "v=spf1")
+    [ -z "$SPF_RECORD" ] && SPF_RECORD="NONE"
     echo "${TC_CYAN}SPF Record${TC_NORMAL}: ${SPF_RECORD}"
 }
 
@@ -168,7 +168,7 @@ function getMX() {
     MX_RECORDS=$(echo "$MX_RECORDS" | sed -r 's/^(\s|\t)*/\t/g' | tr '\n' ' ')
     # Check to see if the MX_RECORDS variable contains ANYTHING but spaces/tabs/newlines...
     # If it doesn't break out before continuing the function.
-    [ -z `echo "${MX_RECORDS}" | grep -Poi '[a-z0-9\-\.]'` ] \
+    [[ -z "`echo "${MX_RECORDS}" | grep -Pim1 '[a-z0-9\.-]'`" ]] \
         && MX_RECORD_OUT="NONE" && echo -e "${TC_GREEN}MX Record(s)${TC_NORMAL}: NONE\n" && return
     MX_RECORD_OUT=
     for hostname in $MX_RECORDS; do
@@ -222,9 +222,7 @@ function RBL_getMXLookup() {
     echo
 }
 
-# Run an IP against the BRBL. Maybe add more later.
-# TODO: Stop referencing "A_RECORD" and instead use the PARAMETER ($1) being passed to the function.
-#### This will both shorten the script and keep better constraints on the "A_RECORD" variable.
+# Run an IP against the BRBL. Maybe add more RBL options later.
 function lookupIP () {
     # Reverse the IP address to prepare it for the DNS record query.
     local BRBL_LOOKUP=
@@ -248,10 +246,10 @@ function checkFallbackLookup() {
 #    $3 = Target (public) DNS server.
 function fallbackLookup() {
     # Give this DNS lookup a bit more grace with time/tries.
-    local TEMPVAR=$(dig +time=5 +tries=3 +short $2 $1 @$3)
-    if [[ "$TEMPVAR" =~ (timed out|unreachable|NXDOMAIN|not found) ]] || [ -z "$TEMPVAR" ]; then
+    local FBLKUP=$(dig +time=5 +tries=3 +short "$2" "$1" @${3})
+    if [[ "${FBLKUP}" =~ (timed out|unreachable|NXDOMAIN|not found) ]] || [ -z "${FBLKUP}" ]; then
         echo "NONE"
-    else echo "$TEMPVAR"; fi
+    else echo "${FBLKUP}"; fi
 }
 
 

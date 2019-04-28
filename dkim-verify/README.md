@@ -9,4 +9,4 @@ Verify the most recent DKIM Signature on an email and check for possible points 
 
 
 ## Sample Bash Output
-![Picture of Sample dkim-verify.sh Script Output](https://raw.githubusercontent.com/ZacharyPuhl/email-security-toolkit/master/docs/images/dkim_working.png)
+![Picture of Sample dkim-verify.sh Script Output](https://raw.githubusercontent.com/NotsoanoNimus/email-security-toolkit/master/docs/images/dkim_working.png)

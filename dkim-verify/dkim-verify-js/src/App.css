@@ -13,4 +13,15 @@ code {
     monospace;
 }
 
-.App { }
+textarea {
+    font-family: monospace;
+    resize: none;
+    min-width: 750px;
+    min-height: 500px;
+    width: 85%;
+    height: 100%;
+    margin: 0 auto;
+    padding: 0;
+}
+
+.App { display: block; }

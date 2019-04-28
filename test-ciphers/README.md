@@ -12,8 +12,8 @@ Miscellaneous things to improve upon in this tool.
 
 ## Sample Bash Output
 ```
-~ $ ./test-ciphers.sh barricade.behemothrp.com:25 -n | tee test.tmp
-Checking supported ciphers for: barricade.behemothrp.com:25
+~ $ ./test-ciphers.sh misc.testserver.email:25 -n | tee test.tmp
+Checking supported ciphers for: misc.testserver.email:25
 Obtaining cipher list from OpenSSL 1.0.2k-fips  26 Jan 2017...
 Test type is SMTP with STARTTLS!
 Testing ECDHE-RSA-AES256-GCM-SHA384... YES (TLSv1.2)

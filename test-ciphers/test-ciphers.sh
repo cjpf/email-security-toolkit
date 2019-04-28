@@ -1,14 +1,35 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
-# TEST_CIPHERS_DYNAMIC.sh
-: Description: Check the supported cipher suite for the targeted server, protocol dynamically selected based on port.
-: Addendum/Additional: If you want to shadow this output to another file, use the "tee" command like so: ./test_ciphers_dynamic.sh server:port \| tee "outfile"
-: Author: Zachary Puhl, MODIFIED FROM / BUILT UPON the utility "test_ciphers.sh"
-: Contact: zpuhl@barracuda.com // postmaster@yeethop.xyz
-: Date: 13 January, 2019
-#########################
+# TEST-CIPHERS.sh
+# Description: Check the supported cipher suite for the targeted server, protocol dynamically selected based on port.
+# Addendum/Additional: If you want to shadow this output to another file, use the "tee" command like so: ./test_ciphers_dynamic.sh server:port \| tee "outfile"
+# Contributors:
+#    Notsoano Nimus <postmaster@thestraightpath.email>
+# Repo: https://github.com/NotsoanoNimus/email-security-toolkit/tree/master/test-ciphers
+# Date [of first use]: 13 January, 2019
+#################
 
-# usage
+######################################################################################
+# test-ciphers is a script to gather information on the supported TLS ciphers of
+#  a target service port on a destination server.
+#
+# Copyright (C) 2019 "Notsoano Nimus", as a free software project
+#  licensed under GNU GPLv3.
+#
+# This program is free software: you can redistribute it and/or modify it under
+#  the terms of the GNU General Public License as published by the Free Software
+#  Foundation, either version 3 of the License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+#  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+#  FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along with
+#  this program. If not, see https://www.gnu.org/licenses/.
+######################################################################################
+
+
+# Script usage information.
 function usage() {
   echo "USAGE: $0 <server-to-check>:<port> i.e. mail.example.com:25"
   echo "  Check and report all supported ciphers on a destination server port."
@@ -101,8 +122,8 @@ for cipher in ${ciphers[@]}; do
       PROTOCOL=$(echo "$result" | tr '\n' ' ' | sed -r 's/.*Protocol\s+:\s+//g' | sed -r 's/\s+Cipher\s+:.*//g')
       echo "${TC_GREEN}YES${TC_NORMAL} (${PROTOCOL})"
     else
-      echo "UNKNOWN RESPONSE"
-      echo "$result"
+      echo "UNKNOWN RESPONSE (possible connection throttling by server)"
+      #echo "$result"
     fi
   fi
   sleep $DELAY
@@ -121,8 +142,8 @@ for suite in ${SUITES[@]}; do
     if [[ "$result" =~ "Cipher is ${cipher}" || ! "$result" =~ 'Cipher\s+:\s+0{4}' ]]; then
       echo "${TC_GREEN}YES${TC_NORMAL}"
     else
-      echo "UNKNOWN RESPONSE"
-      echo "$result"
+      echo "UNKNOWN RESPONSE (possible connection throttling by server)"
+      #echo "$result"
     fi
   fi
   sleep $DELAY

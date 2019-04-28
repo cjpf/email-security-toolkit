@@ -1,11 +1,32 @@
 #!/bin/bash
 
 # DKIM-VERIFY.sh
-: Description: Validate and verify a raw email DKIM signature. Seek and output any errors.
-: Author: Zachary Puhl
-: Contact: zpuhl@barracuda.com // postmaster@yeethop.xyz
-: Date: 17 March, 2019
+# Description: Validate and verify a raw email DKIM signature. Seek and output any errors.
+# Contributors:
+#   Notsoano Nimus <postmaster@thestraightpath.email>
+# Repo: https://github.com/NotsoanoNimus/email-security-toolkit/tree/master/dkim-verify
+# Date [of first use]: 17 March, 2019
 ################
+
+
+######################################################################################
+# test-ciphers is a script to verify and troubleshoot a raw email's most recent DKIM-
+#   Signature header, in accordance with RFC 6376.
+#
+# Copyright (C) 2019 "Notsoano Nimus", as a free software project
+#  licensed under GNU GPLv3.
+#
+# This program is free software: you can redistribute it and/or modify it under
+#  the terms of the GNU General Public License as published by the Free Software
+#  Foundation, either version 3 of the License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+#  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+#  FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along with
+#  this program. If not, see https://www.gnu.org/licenses/.
+######################################################################################
 
 
 # usage
@@ -45,7 +66,7 @@ function initialize() {
   # Initialize/Blank some variables as needed.
   PUBKEY_FILE=/tmp/dkim-verify-$$-pubkey
   DKIM_SIGNATURE=;EMAIL_FILE=;EMAIL_HEADERS=;EMAIL_BODY=;
-  
+
   # Build a space-separated list of dependencies for this script.
   DEPENDENCIES="perl unix2dos openssl base64 dig xxd tr sed sha1sum sha256sum head tail cut truncate"
   # Let the user know
@@ -258,7 +279,7 @@ function canonicalizeHeader() {
     #  Delete all WSP characters at the end of each unfolded header field
     #  value.
     CANON_HEADERS=$(echo -n "${CANON_HEADERS}" | sed -r 's/(\s+|\t+)+/ /g')
-    
+
     # Delete any WSP characters remaining before and after the colon
     #  separating the header field name from the header field value.  The
     #  colon separator MUST be retained.
@@ -324,8 +345,8 @@ function calcBodyHash() {
   echo -n "${CANON_BODY}" >$TEMP_OUT
 
   # Convert the canon. body to hex data, remove all line breaks, swap out repeating \n or \r with \r\n,
-  #   ensure final CRLF (\r\n), convert from hex back to ASCII, pipe into the hashing/digest algorithm, 
-  #   cut out unnecessary particles, convert the hex byte-for-byte to raw binary (ASCII) AGAIN, 
+  #   ensure final CRLF (\r\n), convert from hex back to ASCII, pipe into the hashing/digest algorithm,
+  #   cut out unnecessary particles, convert the hex byte-for-byte to raw binary (ASCII) AGAIN,
   #   replace any possible \r or \n chars, and finally base64-encode the data. Body Hash complete.
   local HASH_PART=$(getField "a")
   if [[ "$HASH_PART" =~ 'sha256' ]]; then HASH_ALG="sha256"; else HASH_ALG="sha1"; fi
@@ -336,13 +357,13 @@ function calcBodyHash() {
     sed -r 's/(0d)+/0d/g' | sed -r 's/0d\s*$/0d0a/' | \
     perl -pe 's/([0-9a-fA-F]{2})/chr hex $1/gie' | \
     2>/dev/null openssl ${HASH_ALG} -binary | base64)
-    
+
   # Good for testing, so leaving it here.
   #LANG='' xxd -ps $TEMP_OUT | tr -d '\n' | tr -d '\r' | \
   # sed -r 's/(0d)+/0d/g' | sed -r 's/0d\s*$/0d0a/' | \
   # perl -pe 's/([0-9a-fA-F]{2})/chr hex $1/gie' | \
   # xxd | less
-  
+
   rm $TEMP_OUT
 }
 
