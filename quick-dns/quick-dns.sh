@@ -30,12 +30,18 @@
 
 # Main function for the script, where the actual actions are taken.
 function quickDNS_main() {
-    # Firstly, see if colors are turned off with the optional flag in ARG1, then shift it out.
-    [[ "$1" =~ ^-[Nn]$ ]] && NO_COLORS="YES" && shift
+
     # Terminal color setup and dependency check.
     colors "${NO_COLORS}"
-    depCheck "dig host grep awk sed tr printf cut head"
+    depCheck "dig host grep awk sed tr printf cut head tac"
 
+    # Run PTR Lookup function if -r flag was present, provide $1 for IP address.
+    # Validation happens inside function call
+    if [[ $_PTR == "YES" ]]; then
+        ptrLookup "$1"
+    fi
+
+    # TODO: run this check on ALL ARGUMENTS `quick_dns.sh domain.com -n` will break the script 
     # Ensure that ARG1 exists and that it has a domain-name format.
     [[ -z "$1" || -z `echo "$1" | grep -Poi '^([a-zA-Z0-9\.\-]+\.[a-zA-Z]{2,})'` ]] && usage
 
