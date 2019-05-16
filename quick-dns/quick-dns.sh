@@ -76,9 +76,8 @@ function usage() {
     echo "  associated IPs, DMARC, RBL stats, and other email-related info."
     echo
     echo "OPTIONS:"
-    echo "    -N    Don't use any colors. This MUST be argument one if used."
+    echo "    -n    Don't use any colors. This MUST be argument one if used."
     echo "** Multiple space-separated domains can be passed to this script."
-    echo
     exit 1
 }
 
