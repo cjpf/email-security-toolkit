@@ -257,11 +257,51 @@ function fallbackLookup() {
     else echo "${FBLKUP}"; fi
 }
 
+# TODO: change invalid address behavior - echo and exit is placeholder - move exit call elsewhere to allow this function to return
+# Check PTR record for an IPv4 Address
+# ARGS:
+#   $1 = IP Address to lookup
+function ptrLookup() {
+    # validate IPv4 address
+    local IP4_PATTERN="^((1\d{2}|2[0-4]\d|25[0-5]|\d{1,2})\.){3}(1\d{2}|2[0-4]\d|25[0-5]|\d{1,2})$"
+    [[ ! -n `echo "${1}" | grep -Poi "${IP4_PATTERN}"` ]] && echo "Invalid IPv4 Address - Exiting" && exit 1
+    echo "IPv4 Address Valid"
+    # reverse IP address and append '.in-addr.arpa' and store separately to filter result
+    local REVERSE_IP=$(printf %s "${1}." | tac -s.)in-addr.arpa
+    # perform lookup and filter result
+    local ANSWER=$(dig ${DEFAULT_OPTIONS} -x ${1} | grep -P "${REVERSE_IP}" | awk '{print $NF}')
+    echo $ANSWER
+    exit 0
+}
 
 
 ################################################################
 ################################################################
 
-# Two-liner to run the main function.
+# This looks for -n and -r and sets vars for main function to branch into reverse lookup or to run normal lookups
+while getopts ":nr:" opt; do
+    case $opt in
+        n)  # see if colors are turned off, then shift it out
+            #echo "-n was triggered $OPTARG" 
+            NO_COLORS="YES"
+            shift
+            ;;
+        r)  # check for reverse lookup flag, shift it out, then run reverse lookup function and exit when done
+            #echo "-r was triggered, Parameter: $OPTARG"
+            shift
+            _PTR="YES"
+            ;;
+        \?)
+            echo "Invalid option: -$OPTARG" >&2
+            usage
+            ;;
+        :)
+            echo "Option -$OPTARG requires an argument." >&2
+            usage
+            ;;
+    esac
+done
+
+# main function.
 quickDNS_main "$@"
 exit 0
