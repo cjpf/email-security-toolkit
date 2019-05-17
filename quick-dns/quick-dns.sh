@@ -30,26 +30,26 @@
 
 # Main function for the script, where the actual actions are taken.
 function quickDNS_main() {
-
     # Terminal color setup and dependency check.
     colors "${NO_COLORS}"
     depCheck "dig host grep awk sed tr printf cut head tac"
-
+    
     # Run PTR Lookup function if -r flag was present, provide $1 for IP address.
     # Validation happens inside function call
-    if [[ $_PTR == "YES" ]]; then
-        ptrLookup "$1"
+    if [[ $PTR_FLAG == "YES" ]]; then
+        getPTR ${1}
+        # TODO: perform DNSBL Lookups here
     fi
-
-    # TODO: run this check on ALL ARGUMENTS `quick_dns.sh domain.com -n` will break the script 
+    
+    # TODO: run this check on ALL ARGUMENTS `quick_dns.sh domain.com -n` will break the script
     # Ensure that ARG1 exists and that it has a domain-name format.
     [[ -z "$1" || -z `echo "$1" | grep -Poi '^([a-zA-Z0-9\.\-]+\.[a-zA-Z]{2,})'` ]] && usage
-
+    
     # DOMAINS: All of the passed domains to the script for multiple runs, if requested.
     DOMAINS="$@"
     # DEFAULT_OPTIONS: Default options for the timeout on the 'dig' lookups that aren't fallback lookups.
     DEFAULT_OPTIONS="+time=2 +tries=2"
-
+    
     # Begin the main loop.
     #IFS=' '
     for fqdn in ${DOMAINS[@]}; do
@@ -58,7 +58,7 @@ function quickDNS_main() {
         DOMAIN="${fqdn}"
         echo "################################################################################"
         echo "Checking DNS information for ${TC_BOLD}${TC_YELLOW}${fqdn}${TC_NORMAL}..."
-
+        
         getNameServers
         getSPF
         getDMARC
@@ -68,7 +68,6 @@ function quickDNS_main() {
         echo
     done
 }
-
 
 ################################################################
 ###################### Pre-Script Modules ######################
@@ -118,9 +117,9 @@ function depCheck() {
     for needed in ${DEPENDENCIES[@]}; do
         command -v $needed 2>&1 >/dev/null
         if [ $? -ne 0 ]; then
-          echo "${TC_RED}ERROR${TC_NORMAL}: Missing dependency command \"${TC_BLUE}${needed}${TC_NORMAL}\"."
-          echo "    Please install this on your local machine and try again."
-          exit 255
+            echo "${TC_RED}ERROR${TC_NORMAL}: Missing dependency command \"${TC_BLUE}${needed}${TC_NORMAL}\"."
+            echo "    Please install this on your local machine and try again."
+            exit 255
         fi
     done
 }
@@ -143,7 +142,7 @@ function getNameServers() {
     [[ -z "$NAME_SERVER" || -z `host ${NAME_SERVER} | grep -Pv '(NXDOMAIN)|not found'` ]] && NAME_SERVER="8.8.8.8"
     printf "${TC_BLUE}Primary Nameserver${TC_NORMAL}: "
     [[ "${NAME_SERVER}" == "8.8.8.8" ]] \
-        && echo "NONE (defaulting to ${TC_BOLD}8.8.8.8${TC_NORMAL} Google Public DNS)" || echo "${NAME_SERVER}"
+    && echo "NONE (defaulting to ${TC_BOLD}8.8.8.8${TC_NORMAL} Google Public DNS)" || echo "${NAME_SERVER}"
 }
 
 # Get the SPF record(s) for the domain.
@@ -174,16 +173,16 @@ function getMX() {
     # Check to see if the MX_RECORDS variable contains ANYTHING but spaces/tabs/newlines...
     # If it doesn't break out before continuing the function.
     [[ -z "`echo "${MX_RECORDS}" | grep -Pim1 '[a-z0-9\.-]'`" ]] \
-        && MX_RECORD_OUT="NONE" && echo -e "${TC_GREEN}MX Record(s)${TC_NORMAL}: NONE\n" && return
+    && MX_RECORD_OUT="NONE" && echo -e "${TC_GREEN}MX Record(s)${TC_NORMAL}: NONE\n" && return
     MX_RECORD_OUT=
     for hostname in $MX_RECORDS; do
         if [[ -n `echo "$hostname" | grep -Poi '^[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}\.?$'` \
-        || "$hostname" =~ '^[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}\.?$' ]]; then
+            || "$hostname" =~ '^[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}\.?$' ]]; then
             # It's an FQDN. The dig should be done against a public DNS since the FQDN can be for a different domain.
             hostname="${hostname} \t(Resolved IP: `dig a +short ${hostname} @8.8.8.8 | head -1`)\n"
-        elif [[ "$hostname" =~ '^(\d{1,3}\.){3}\d{1,3}$' || "$hostname" =~ '^([0-9a-fA-F]{1,4})(::?[0-9a-fA-F]{1,4}){1,5}$' \
-        || -n `echo "$hostname" | grep -Poi '^(\d{1,3}\.){3}\d{1,3}$'` \
-        || -n `echo "$hostname" | grep -Poi '^([0-9a-fA-F]{1,4})(::?[0-9a-fA-F]{1,4}){1,5}$'` ]]; then
+            elif [[ "$hostname" =~ '^(\d{1,3}\.){3}\d{1,3}$' || "$hostname" =~ '^([0-9a-fA-F]{1,4})(::?[0-9a-fA-F]{1,4}){1,5}$' \
+                || -n `echo "$hostname" | grep -Poi '^(\d{1,3}\.){3}\d{1,3}$'` \
+            || -n `echo "$hostname" | grep -Poi '^([0-9a-fA-F]{1,4})(::?[0-9a-fA-F]{1,4}){1,5}$'` ]]; then
             # MX host is already an IPv4 or IPv6 address.
             hostname="${hostname}\n"
         else
@@ -196,19 +195,38 @@ function getMX() {
     echo -e "${TC_GREEN}MX Record(s)${TC_NORMAL}:\n${MX_RECORD_OUT}\n"
 }
 
+# TODO: change invalid address behavior - echo and exit is placeholder - move exit call elsewhere to allow this function to return
+# Check PTR record for an IPv4 Address
+# ARGS:
+#   $1 = IP Address to lookup
+function getPTR() {
+    # validate IPv4 address
+    local IP4_PATTERN="^((1\d{2}|2[0-4]\d|25[0-5]|\d{1,2})\.){3}(1\d{2}|2[0-4]\d|25[0-5]|\d{1,2})$"
+    [[ ! -n `echo "${1}" | grep -Poi "${IP4_PATTERN}"` ]] && echo "Invalid IPv4 Address - Exiting" && exit 1
+    # reverse IP address and append '.in-addr.arpa' and store separately to filter result
+    local REVERSE_IP=$(printf %s "${1}." | tac -s.)in-addr.arpa
+    # perform lookup and filter result
+    local ANSWER=$(dig ${DEFAULT_OPTIONS} -x ${1} | grep -P '${REVERSE_IP}' | awk '{print $NF}')
+    echo ${ANSWER}
+    
+}
+
 # Run an RBL check against the web-server/A-record IP of the domain.
-## TODO: consider changing "host" command to a dig instead.
 function RBL_getALookup() {
     # Begin RBL Check
     echo "Attempting A-record RBL check..."
-    A_RECORD=$(host ${DOMAIN} | grep -v 'IPv6' | head -n1 | awk '{print $4}')
-    if [[ -z "${A_RECORD}" || "${A_RECORD}" =~ [a-zA-Z0-9\-] ]]; then
-        echo "DNS A-Record for ${DOMAIN} isn't defined..."
+    A_RECORD=$(dig ${DEFAULT_OPTIONS} a ${DOMAIN} | grep ${DOMAIN} | awk '{print $NF}' | tail -1)
+    
+    if [[ -z "${A_RECORD}" || \
+        -z `echo "${A_RECORD}" | grep -Poi '^((1\d{2}|2[0-4]\d|25[0-5]|\d{1,2})\.){3}(1\d{2}|2[0-4]\d|25[0-5]|\d{1,2})$'` ]]; then
+        echo "DNS A-Record for ${DOMAIN} isn't defined; skipping A-record RBL check..."
     else
         printf "Checking Barracuda RBL for the web server IP address (${A_RECORD})... "
-        lookupIP "${A_RECORD}"
+        lookupIP ${A_RECORD}
+        getPTR ${A_RECORD}
     fi
     echo
+
 }
 
 # Run an RBL check against all resolved IPs from the MX record entries.
@@ -220,11 +238,13 @@ function RBL_getMXLookup() {
     for i in $(host $DOMAIN | grep -Po 'mail is handled by \d+ (.*)$' | grep -Poi '([a-z0-9\-]+\.)+' | tr '\n' ' '); do
         if [[ ! i =~ '^(\d+\.){3}\d+\.?$' ]]; then
             A_RECORD=$(host $i | grep -v 'IPv6' | head -n1 | awk '{print $4}')
-        else A_RECORD="$i"; fi
+    else A_RECORD="$i"; fi
         printf "Checking Barracuda RBL for the mail server IP address (${A_RECORD})... "
-        lookupIP "${A_RECORD}"
+        lookupIP ${A_RECORD}
+        getPTR ${A_RECORD}
     done
     echo
+
 }
 
 # Run an IP against the BRBL. Maybe add more RBL options later.
@@ -254,26 +274,8 @@ function fallbackLookup() {
     local FBLKUP=$(dig +time=5 +tries=3 +short "$2" "$1" @${3})
     if [[ "${FBLKUP}" =~ (timed out|unreachable|NXDOMAIN|not found) ]] || [ -z "${FBLKUP}" ]; then
         echo "NONE"
-    else echo "${FBLKUP}"; fi
+else echo "${FBLKUP}"; fi
 }
-
-# TODO: change invalid address behavior - echo and exit is placeholder - move exit call elsewhere to allow this function to return
-# Check PTR record for an IPv4 Address
-# ARGS:
-#   $1 = IP Address to lookup
-function ptrLookup() {
-    # validate IPv4 address
-    local IP4_PATTERN="^((1\d{2}|2[0-4]\d|25[0-5]|\d{1,2})\.){3}(1\d{2}|2[0-4]\d|25[0-5]|\d{1,2})$"
-    [[ ! -n `echo "${1}" | grep -Poi "${IP4_PATTERN}"` ]] && echo "Invalid IPv4 Address - Exiting" && exit 1
-    echo "IPv4 Address Valid"
-    # reverse IP address and append '.in-addr.arpa' and store separately to filter result
-    local REVERSE_IP=$(printf %s "${1}." | tac -s.)in-addr.arpa
-    # perform lookup and filter result
-    local ANSWER=$(dig ${DEFAULT_OPTIONS} -x ${1} | grep -P "${REVERSE_IP}" | awk '{print $NF}')
-    echo $ANSWER
-    exit 0
-}
-
 
 ################################################################
 ################################################################
@@ -282,23 +284,23 @@ function ptrLookup() {
 while getopts ":nr:" opt; do
     case $opt in
         n)  # see if colors are turned off, then shift it out
-            #echo "-n was triggered $OPTARG" 
+            #echo "-n was triggered $OPTARG"
             NO_COLORS="YES"
             shift
-            ;;
+        ;;
         r)  # check for reverse lookup flag, shift it out, then run reverse lookup function and exit when done
             #echo "-r was triggered, Parameter: $OPTARG"
             shift
-            _PTR="YES"
-            ;;
+            PTR_FLAG="YES"
+        ;;
         \?)
             echo "Invalid option: -$OPTARG" >&2
             usage
-            ;;
+        ;;
         :)
             echo "Option -$OPTARG requires an argument." >&2
             usage
-            ;;
+        ;;
     esac
 done
 
