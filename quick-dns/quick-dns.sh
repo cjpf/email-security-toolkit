@@ -64,6 +64,7 @@ function quickDNS_main() {
         getSPF
         getDMARC
         getMX
+        RBL_CHECKED_IPS=
         RBL_getALookup
         RBL_getMXLookup
         echo
@@ -83,6 +84,7 @@ function usage() {
     echo
     echo "OPTIONS:"
     echo "    -n    Don't use any colors. This MUST be argument one if used."
+    echo "    -n    Don't use any colors. This MUST be the FIRST argument, if used."
     echo "** Multiple space-separated domains can be passed to this script."
     exit 1
 }
@@ -106,6 +108,7 @@ function colors() {
         TC_YELLOW=`tput setaf 3 2>/dev/null`
         TC_BLUE=`tput setaf 4 2>/dev/null`
         TC_MAGENTA=`tput setaf 5 2>/dev/null`
+        TC_PURPLE=`tput setaf 5 2>/dev/null`
         TC_CYAN=`tput setaf 6 2>/dev/null`
         TC_NORMAL=`tput sgr0 2>/dev/null`
         TC_BOLD=`tput bold 2>/dev/null`
@@ -176,7 +179,7 @@ function getDMARC() {
 
 # Get the A record for the domain
 function getA() {
-    A_RECORD=$(dig ${DEFAULT_OPTIONS} a ${1} | grep ${1} | awk '{print $NF}' | tail -1)
+    echo "`dig ${DEFAULT_OPTIONS} +short a ${1} | tail -1`"
 }
 
 # Get the MX record(s) for the domain.
@@ -223,23 +226,27 @@ function getPTR() {
     local ANSWER=$(dig ${DEFAULT_OPTIONS} -x "${1}" | grep -P ${REVERSE_IP} | awk '{print $NF}' | tail -1)
     # test ANSWER to see if it is equal to "PTR" - if so, then there is no PTR found against this ip4 address
     [[ "${ANSWER}" == "PTR" || ${ANSWER} == "" ]] && echo -e "\tNo PTR Record found for ${1}." && return
-    echo -e "\t${TC_MAGENTA}PTR Record${TC_NORMAL}:\t${ANSWER}\n"
+    echo -e "\t${TC_PURPLE}PTR Record${TC_NORMAL}:\t${ANSWER}\n"
 }
 
 # Run an RBL check against the web-server/A-record IP of the domain.
 function RBL_getALookup() {
     # Begin RBL Check
-    echo "Attempting A-record RBL check..."
     # set the A_RECORD variable 
-    getA ${DOMAIN}
+    A_RECORD=$(getA ${DOMAIN})
     
     if [[ -z "${A_RECORD}" || \
         -z `echo "${A_RECORD}" | grep -Poi '^((1\d{2}|2[0-4]\d|25[0-5]|\d{1,2})\.){3}(1\d{2}|2[0-4]\d|25[0-5]|\d{1,2})$'` ]]; then
         echo "DNS A-Record for ${DOMAIN} isn't defined; skipping A-record RBL check..."
     else
-        printf "Checking Barracuda RBL for the web server IP address (${A_RECORD})... "
-        lookupIP ${A_RECORD}
-        getPTR ${A_RECORD}
+        # As long as the IP hasn't already been checked by RBLs, proceed.
+        ## Otherwise, skip with a notification.
+        echo "Attempting A-record RBL check for ${A_RECORD}..."
+        if [[ -z `echo "${RBL_CHECKED_IPS}" | grep -Poi "${A_RECORD}"` ]]; then
+            lookupIP "${A_RECORD}" "b.barracudacentral.org" "Barracuda RBL"
+            getPTR ${A_RECORD}
+            RBL_CHECKED_IPS="${RBL_CHECKED_IPS} ${A_RECORD}"
+        else echo "IP ${A_RECORD} has already been checked. Skipping."; fi
     fi
     echo
 
@@ -255,22 +262,54 @@ function RBL_getMXLookup() {
             # set the A_RECORD variable
             getA ${i}
         else A_RECORD="$i"; fi
-        printf "Checking Barracuda RBL for the mail server IP address (${A_RECORD})... "
-        lookupIP ${A_RECORD}
         getPTR ${A_RECORD}
+        checkAllRBLs "${A_RECORD}"
     done
     echo
 }
 
-# Run an IP against the BRBL. Maybe add more RBL options later.
+# Check against all available DNSBL locations for this script.
+# PARAMS: 1 - Target IP Address
+function checkAllRBLs() {
+    echo "  --====================--   ${1}   --====================--  "
+    [[ -n `echo "${RBL_CHECKED_IPS}" | grep -Poi "${1}"` ]] \
+        && echo "IP ${1} has already been checked. Skipping." && return 1
+    lookupIP "${1}" "b.barracudacentral.org" "Barracuda RBL"
+    lookupIP "${1}" "spam.dnsbl.sorbs.net" "SORBS Spam"
+    lookupIP "${1}" "dnsbl-1.uceprotect.net" "UCEPROTECTL1"
+    lookupIP "${1}" "bl.spamcop.net" "SpamCop"
+    lookupIP "${1}" "noptr.spamrats.com" "SpamRats NoPTR (no-PTR-record spammers)"
+    lookupIP "${1}" "dyna.spamrats.com" "SpamRats DYNA (suspicious PTR records)"
+    lookupIP "${1}" "rbl.megarbl.net" "MegaRBL"
+    lookupIP "${1}" "zen.spamhaus.org" "Spamhaus ZEN"
+    lookupIP "${1}" "dnsbl.spfbl.net" "SPFBL"
+    lookupIP "${1}" "ubl.unsubscore.com" "LASHBACK"
+    lookupIP "${1}" "db.wpbl.info" "WPBL"
+    lookupIP "${1}" "cbl.abuseat.org" "Composite Blocking List (CBL)"
+    RBL_CHECKED_IPS="${RBL_CHECKED_IPS} ${1}"
+    return 0
+}
+
+# Run an IP against the given RBL.
+# PARAMS: 1 - Target IP address, 2 - DNSBL location, 3 - (optional) RBL name.
 function lookupIP () {
     # Reverse the IP address to prepare it for the DNS record query.
     local BRBL_LOOKUP=
     for i in {4..1}; do local BRBL_LOOKUP="${BRBL_LOOKUP}`echo "${1}" | cut -d'.' -f${i}`."; done
-    local BRBL_LOOKUP="${BRBL_LOOKUP}b.barracudacentral.org"
+    local BRBL_LOOKUP="${BRBL_LOOKUP}${2}"
     # Running this query against a public DNS service.
     local IS_LISTED=$(dig a +short ${BRBL_LOOKUP} @1.1.1.1)
-    if [ -n "$IS_LISTED" ]; then echo "[${TC_RED}LISTED${TC_NORMAL}]"; else echo "[${TC_GREEN}NOT LISTED${TC_NORMAL}]"; fi
+    local CHECKING_INDICATOR=
+    local CHECKING_RESULT=
+    [ -n "$3" ] && local CHECKING_INDICATOR="Checking \"${TC_BOLD}${3}${TC_NORMAL}\" " \
+        || local CHECKING_INDICATOR="Checking DNSBL at \"${TC_BOLD}${2}${TC_NORMAL}\" "
+    if [ -n "$IS_LISTED" ]; then
+        local CHECKING_RESULT="[${TC_RED}LISTED${TC_NORMAL}]"
+        local LISTED_REASON=$(dig txt +short ${BRBL_LOOKUP} @1.1.1.1)
+        local CHECKING_RESULT=`echo -e "${CHECKING_RESULT}\n ----> Given Reason (if any): ${LISTED_REASON}"`
+    else local CHECKING_RESULT="[${TC_GREEN}NOT LISTED${TC_NORMAL}]"; fi
+
+    printf "%-65s : %s\n" "$CHECKING_INDICATOR" "$CHECKING_RESULT"
 }
 
 # Check a public DNS server if the chosen Name Server fails or times out on a lookup.
