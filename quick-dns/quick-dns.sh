@@ -36,9 +36,11 @@ function quickDNS_main() {
     
     # Run PTR Lookup function if -r flag was present, provide $1 for IP address.
     # Validation happens inside function call
-    if [[ $PTR_FLAG == "YES" ]]; then
+    if [[ ${PTR_FLAG} == "YES" ]]; then
+        printBanner ${1}
         getPTR ${1}
         # TODO: perform DNSBL Lookups here
+        exit 0
     fi
     
     # TODO: run this check on ALL ARGUMENTS `quick_dns.sh domain.com -n` will break the script
@@ -56,8 +58,7 @@ function quickDNS_main() {
         # Run the script for a domain. Start by resetting variables and then crunching the DNS.
         clearVars "NAME_SERVER SPF_RECORD DMARC_RECORD MX_RECORD_OUT MX_RECORDS A_RECORD"
         DOMAIN="${fqdn}"
-        echo "################################################################################"
-        echo "Checking DNS information for ${TC_BOLD}${TC_YELLOW}${fqdn}${TC_NORMAL}..."
+        printBanner ${fqdn}
         
         getNameServers
         getSPF
@@ -84,6 +85,13 @@ function usage() {
     echo "    -n    Don't use any colors. This MUST be argument one if used."
     echo "** Multiple space-separated domains can be passed to this script."
     exit 1
+}
+
+# ARGS
+#   $1 The domain name or IP adress used to print the banner
+function printBanner() {
+    echo "################################################################################"
+    echo "Checking DNS information for ${TC_BOLD}${TC_YELLOW}${1}${TC_NORMAL}..."
 }
 
 # Set up the terminal color variables, if supported.
