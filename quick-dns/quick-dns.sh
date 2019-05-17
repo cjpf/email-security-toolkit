@@ -105,6 +105,7 @@ function colors() {
         TC_GREEN=`tput setaf 2 2>/dev/null`
         TC_YELLOW=`tput setaf 3 2>/dev/null`
         TC_BLUE=`tput setaf 4 2>/dev/null`
+        TC_MAGENTA=`tput setaf 5 2>/dev/null`
         TC_CYAN=`tput setaf 6 2>/dev/null`
         TC_NORMAL=`tput sgr0 2>/dev/null`
         TC_BOLD=`tput bold 2>/dev/null`
@@ -173,6 +174,11 @@ function getDMARC() {
     echo "${TC_RED}DMARC Record${TC_NORMAL}: ${DMARC_RECORD}"
 }
 
+# Get the A record for the domain
+function getA() {
+    A_RECORD=$(dig ${DEFAULT_OPTIONS} a ${1} | grep ${1} | awk '{print $NF}' | tail -1)
+}
+
 # Get the MX record(s) for the domain.
 function getMX() {
     MX_RECORDS=$(dig mx ${DEFAULT_OPTIONS} +short ${DOMAIN} @${NAME_SERVER})
@@ -214,16 +220,18 @@ function getPTR() {
     # reverse IP address and append '.in-addr.arpa' and store separately to filter result
     local REVERSE_IP=$(printf %s "${1}." | tac -s.)in-addr.arpa
     # perform lookup and filter result
-    local ANSWER=$(dig ${DEFAULT_OPTIONS} -x ${1} | grep -P '${REVERSE_IP}' | awk '{print $NF}')
-    echo ${ANSWER}
-    
+    local ANSWER=$(dig ${DEFAULT_OPTIONS} -x "${1}" | grep -P ${REVERSE_IP} | awk '{print $NF}' | tail -1)
+    # test ANSWER to see if it is equal to "PTR" - if so, then there is no PTR found against this ip4 address
+    [[ "${ANSWER}" == "PTR" || ${ANSWER} == "" ]] && echo -e "\tNo PTR Record found for ${1}." && return
+    echo -e "\t${TC_MAGENTA}PTR Record${TC_NORMAL}:\t${ANSWER}\n"
 }
 
 # Run an RBL check against the web-server/A-record IP of the domain.
 function RBL_getALookup() {
     # Begin RBL Check
     echo "Attempting A-record RBL check..."
-    A_RECORD=$(dig ${DEFAULT_OPTIONS} a ${DOMAIN} | grep ${DOMAIN} | awk '{print $NF}' | tail -1)
+    # set the A_RECORD variable 
+    getA ${DOMAIN}
     
     if [[ -z "${A_RECORD}" || \
         -z `echo "${A_RECORD}" | grep -Poi '^((1\d{2}|2[0-4]\d|25[0-5]|\d{1,2})\.){3}(1\d{2}|2[0-4]\d|25[0-5]|\d{1,2})$'` ]]; then
@@ -238,21 +246,20 @@ function RBL_getALookup() {
 }
 
 # Run an RBL check against all resolved IPs from the MX record entries.
-## TODO: consider changing "host" command to a dig instead.
 function RBL_getMXLookup() {
     [[ "${MX_RECORD_OUT}" == "NONE" ]] && return
     # RBL Check on Mail Servers in MX records.
     echo "Attempting MX-record RBL check..."
     for i in $(host $DOMAIN | grep -Po 'mail is handled by \d+ (.*)$' | grep -Poi '([a-z0-9\-]+\.)+' | tr '\n' ' '); do
         if [[ ! i =~ '^(\d+\.){3}\d+\.?$' ]]; then
-            A_RECORD=$(host $i | grep -v 'IPv6' | head -n1 | awk '{print $4}')
-    else A_RECORD="$i"; fi
+            # set the A_RECORD variable
+            getA ${i}
+        else A_RECORD="$i"; fi
         printf "Checking Barracuda RBL for the mail server IP address (${A_RECORD})... "
         lookupIP ${A_RECORD}
         getPTR ${A_RECORD}
     done
     echo
-
 }
 
 # Run an IP against the BRBL. Maybe add more RBL options later.
@@ -272,6 +279,7 @@ function lookupIP () {
 function checkFallbackLookup() {
     [[ "$1" =~ (timed out|unreachable|NXDOMAIN|not found) ]] && return 1 || return 0
 }
+
 # Actually do the lookup if the above check returns anything but 0.
 # ARGS:
 #    $1 = Record to look up.
@@ -287,6 +295,7 @@ else echo "${FBLKUP}"; fi
 
 ################################################################
 ################################################################
+# main function.
 
 # This looks for -n and -r and sets vars for main function to branch into reverse lookup or to run normal lookups
 while getopts ":nr:" opt; do
@@ -312,6 +321,5 @@ while getopts ":nr:" opt; do
     esac
 done
 
-# main function.
 quickDNS_main "$@"
 exit 0
