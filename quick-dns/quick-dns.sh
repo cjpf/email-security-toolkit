@@ -30,6 +30,9 @@
 
 # Main function for the script, where the actual actions are taken.
 function quickDNS_main() {
+    # Enable debugging
+    [ "${DEBUG}" == 'true' ] && set -x
+
     # Terminal color setup and dependency check.
     colors "${NO_COLORS}"
     depCheck "dig host grep awk sed tr printf cut head tac"
