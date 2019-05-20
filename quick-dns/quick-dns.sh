@@ -340,7 +340,7 @@ else echo "${FBLKUP}"; fi
 # main function.
 
 # This looks for -n and -r and sets vars for main function to branch into reverse lookup or to run normal lookups
-while getopts ":nr:" opt; do
+while getopts ":n:dr:" opt; do
     case $opt in
         n)  # see if colors are turned off, then shift it out
             #echo "-n was triggered $OPTARG"
@@ -351,6 +351,11 @@ while getopts ":nr:" opt; do
             #echo "-r was triggered, Parameter: $OPTARG"
             shift
             PTR_FLAG="YES"
+        ;;
+        d)  # debug flag
+            #echo "-d was triggered, Parameter: $OPTARG"
+            shift
+            DEBUG='true'
         ;;
         \?)
             echo "Invalid option: -$OPTARG" >&2
