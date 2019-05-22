@@ -7,9 +7,9 @@ A script written to quickly gather email information about a certain domain. Sup
 + RBL check against for the A-record of the domain (_the hosting web server_) and the MX-record(s).
 
 ## TODO
-+ Add reverse-DNS lookup to both the A-record and the MX-record hosts. Warn the user if there are hosts without a valid PTR record.
-+ For RBL lookups, many of these providers use specific codes for the reason of the block. Maybe send this output to the user for more info. For example, see https://spfbl.net/en/dnsbl/.
-+ Complete IPv6 support.
++ [X] Add reverse-DNS lookup to both the A-record and the MX-record hosts. Warn the user if there are hosts without a valid PTR record.
++ [ ] For RBL lookups, many of these providers use specific codes for the reason of the block. Maybe send this output to the user for more info. For example, see https://spfbl.net/en/dnsbl/.
++ [ ] Complete IPv6 support.
 
 ## Sample Bash Output
 ```
