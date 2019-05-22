@@ -384,7 +384,7 @@ function checkDKIMAlignment() {
     # Or, check relaxed mode "r" for the d= tag to be a subdomain of the header-from domain.
     if [[ "${DMARC_ADKIM}" == "s" && "${RETDOMAIN}" == "${DMARC_DOMAIN}" ]] || \
         [[ "${DMARC_ADKIM}" == "r" \
-        && -z `echo "${RETDOMAIN}" | grep -Poi "${DMARC_DOMAIN}"'$'` ]]; then local VERDICT=${PASS_ALIGN};
+        && -n `echo "${RETDOMAIN}" | grep -Poi "${DMARC_DOMAIN}"'$'` ]]; then local VERDICT=${PASS_ALIGN};
     else local VERDICT=${PASS_NOALIGN}; fi
     # If the DKIM verification failed, add 2 to the VERDICT variable.
     [[ ${RETCODE} -ne 0 ]] && local VERDICT=$(expr ${VERDICT} + 2)

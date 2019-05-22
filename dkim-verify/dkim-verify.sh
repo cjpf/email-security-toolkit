@@ -391,7 +391,7 @@ if [[ "$2" == "--get-domain" ]]; then
     cp "$1" "/tmp/dkim-verify-email-$$"
     EMAIL_FILE="/tmp/dkim-verify-email-$$"
     extractSignature "${EMAIL_FILE}" 2>&1 >/dev/null
-    local RETURN_DOMAIN=$(getField "d")
+    RETURN_DOMAIN=$(getField "d")
     echo "${RETURN_DOMAIN}"
     exit 254
 fi
