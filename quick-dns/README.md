@@ -13,65 +13,65 @@ A script written to quickly gather email information about a certain domain. Sup
 
 ## Sample Bash Output
 ```
-[notso@anonymous quick-dns]$ ./quick-dns.sh -N thestraightpath.email charliejuliet.net
+[notso@anonymous quick-dns]$ ./quick-dns.sh "test.net example.com" -n
 ################################################################################
-Checking DNS information for thestraightpath.email...
-Primary Nameserver: ns11.domaincontrol.com.
-SPF Record: "v=spf1 +a:maintain.thestraightpath.email -all"
-DMARC Record: "v=DMARC1; p=reject; sp=reject; pct=100; adkim=s; aspf=s; ri=86400; fo=1; rua=mailto:postmaster@thestraightpath.email; ruf=mailto:pos
-tmaster@thestraightpath.email"
+Checking DNS information for test.net...
+Primary Nameserver: shades18.rzone.de.
+SPF Record: NONE
+DMARC Record: NONE
 MX Record(s):
-        5 maintain.thestraightpath.email.       (Resolved IP: 142.93.49.168)
+	5 smtpin.rzone.de. 	(Resolved IP: 81.169.145.97)
 
 
-Attempting A-record RBL check for 167.99.225.207...
-Checking "Barracuda RBL"                                  : [NOT LISTED]
+Attempting A-record RBL check for 85.214.110.167...
+Checking "Barracuda RBL"                                : [NOT LISTED]
+	PTR Record:	h2439270.stratoserver.net.
 
 Attempting MX-record RBL check...
-  --====================--   142.93.49.168   --====================--  
-Checking "Barracuda RBL"                                  : [NOT LISTED]
-Checking "SORBS Spam"                                     : [NOT LISTED]
-Checking "UCEPROTECTL1"                                   : [NOT LISTED]
-Checking "SpamCop"                                        : [NOT LISTED]
-Checking "SpamRats NoPTR (no-PTR-record spammers)"        : [NOT LISTED]
-Checking "SpamRats DYNA (suspicious PTR records)"         : [NOT LISTED]
-Checking "MegaRBL"                                        : [NOT LISTED]
-Checking "Spamhaus ZEN"                                   : [NOT LISTED]
-Checking "SPFBL"                                          : [LISTED]
- ----> Given Reason (if any): "https://matrix.spfbl.net/142.93.49.168"
-Checking "LASHBACK"                                       : [NOT LISTED]
-Checking "WPBL"                                           : [NOT LISTED]
-Checking "Composite Blocking List (CBL)"                  : [NOT LISTED]
+  --========--   81.169.145.97 (PTR: smtpin.rzone.de.)    --========--  
+Checking "Barracuda RBL"                                : [NOT LISTED]
+Checking "SORBS Spam"                                   : [NOT LISTED]
+Checking "UCEPROTECTL1"                                 : [NOT LISTED]
+Checking "SpamCop"                                      : [NOT LISTED]
+Checking "SpamRats NoPTR (no-PTR-record spammers)"      : [NOT LISTED]
+Checking "SpamRats DYNA (suspicious PTR records)"       : [NOT LISTED]
+Checking "MegaRBL"                                      : [NOT LISTED]
+Checking "Spamhaus ZEN"                                 : [NOT LISTED]
+Checking "SPFBL"                                        : [NOT LISTED]
+Checking "LASHBACK"                                     : [NOT LISTED]
+Checking "WPBL"                                         : [NOT LISTED]
+Checking "Composite Blocking List (CBL)"                : [NOT LISTED]
 
 
 ################################################################################
-Checking DNS information for charliejuliet.net...
-Primary Nameserver: ns18.domaincontrol.com.
-SPF Record: "v=spf1 include:_spf.protonmail.ch include:charliejuliet.net mx ip4:23.239.17.132 ~all"
-DMARC Record: "v=DMARC1; p=none; rua=mailto:cjpf@charliejuliet.net"
-MX Record(s):
-        1 mail.charliejuliet.net.       (Resolved IP: 165.227.191.80)
+Checking DNS information for example.com...
+Primary Nameserver: a.iana-servers.net.
+SPF Record: "v=spf1 -all"
+DMARC Record: NONE
+MX Record(s): NONE
+
+Attempting A-record RBL check for 93.184.216.34...
+Checking "Barracuda RBL"                                : [NOT LISTED]
+	No PTR Record found for 93.184.216.34...
 
 
-Attempting A-record RBL check for 23.239.17.132...
-Checking "Barracuda RBL"                                  : [NOT LISTED]
-
-Attempting MX-record RBL check...
-  --====================--   165.227.191.80   --====================--  
-Checking "Barracuda RBL"                                  : [NOT LISTED]
-Checking "SORBS Spam"                                     : [NOT LISTED]
-Checking "UCEPROTECTL1"                                   : [NOT LISTED]
-Checking "SpamCop"                                        : [NOT LISTED]
-Checking "SpamRats NoPTR (no-PTR-record spammers)"        : [NOT LISTED]
-Checking "SpamRats DYNA (suspicious PTR records)"         : [NOT LISTED]
-Checking "MegaRBL"                                        : [NOT LISTED]
-Checking "Spamhaus ZEN"                                   : [NOT LISTED]
-Checking "SPFBL"                                          : [LISTED]
- ----> Given Reason (if any): "https://matrix.spfbl.net/165.227.191.80"
-Checking "LASHBACK"                                       : [NOT LISTED]
-Checking "WPBL"                                           : [NOT LISTED]
-Checking "Composite Blocking List (CBL)"                  : [NOT LISTED]
-
+[notso@anonymous quick-dns]$ ./quick-dns.sh.experimental -r 1.1.1.1             
+Checking RBLs for IP address: 1.1.1.1
+	PTR Record:	one.one.one.one.
+  --========--   1.1.1.1 (PTR: one.one.one.one.)    --========--  
+Checking "Barracuda RBL"                                : [NOT LISTED]
+Checking "SORBS Spam"                                   : [NOT LISTED]
+Checking "UCEPROTECTL1"                                 : [NOT LISTED]
+Checking "SpamCop"                                      : [NOT LISTED]
+Checking "SpamRats NoPTR (no-PTR-record spammers)"      : [NOT LISTED]
+Checking "SpamRats DYNA (suspicious PTR records)"       : [LISTED]
+ ----> Given Reason (if any): "SPAMRATS IP Addresses See: http://www.spamrats.com/bl?1.1.1.1"
+Checking "MegaRBL"                                      : [NOT LISTED]
+Checking "Spamhaus ZEN"                                 : [NOT LISTED]
+Checking "SPFBL"                                        : [NOT LISTED]
+Checking "LASHBACK"                                     : [NOT LISTED]
+Checking "WPBL"                                         : [NOT LISTED]
+Checking "Composite Blocking List (CBL)"                : [NOT LISTED]
 
 [notso@anonymous quick-dns]$
 ```
