@@ -31,7 +31,7 @@
 # Main function for the script, where the actual actions are taken.
 function quickDNS_main() {
     # Unset some variables.
-    clearVars "DOMAINS MX_IP_LIST NO_COLORS V4_LOOKUP V6_LOOKUP SKIP_GET_DOMAIN"
+    clearVars "DOMAINS MX_IP_LIST NO_COLORS V4_LOOKUP V6_LOOKUP SKIP_GET_DOMAIN PTR_RECORD FULL_IP REVERSED_IP"
 
     [[ "${1:0:2}" == "-R" || "${1:0:2}" == "-r" ]] \
         && SKIP_GET_DOMAIN="YES"
