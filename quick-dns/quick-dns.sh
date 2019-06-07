@@ -177,7 +177,6 @@ function clearVars() {
     for x in "$@"; do unset `echo $x`; done
 }
 
-
 ################################################################
 ##################  Script Modules/Functions  ##################
 ################################################################
@@ -266,14 +265,23 @@ function getMX() {
 function getPTR() {
     # validate IPv4 address
     local IP4_PATTERN='^((1\d{2}|2[0-4]\d|25[0-5]|\d{1,2})\.){3}(1\d{2}|2[0-4]\d|25[0-5]|\d{1,2})$'
-    [[ ! -n `echo "${1}" | grep -Poi "${IP4_PATTERN}"` ]] && echo "Invalid IPv4 Address"
-    # reverse IP address and append '.in-addr.arpa' and store separately to filter result
-    local REVERSE_IP=$(printf %s "${1}." | tac -s.)in-addr.arpa
-    # perform lookup and filter result
-    PTR_RECORD=$(dig ${DEFAULT_OPTIONS} -x "${1}" | tail -n1)
-    # test ANSWER to see if it is equal to "PTR" - if so, then there is no PTR found against this ip4 address
-    [ -z "${PTR_RECORD}" ] && PTR_RECORD="not defined"
-    #echo -e "\t${TC_PURPLE}PTR Record${TC_NORMAL}:\t${ANSWER}"
+    if [[ -n `echo "${1}" | grep -Poi "${IP4_PATTERN}"` ]]; then
+        # reverse IP address and append '.in-addr.arpa' and store separately to filter result
+        local REVERSED_IP=$(printf %s "${1}." | tac -s.)in-addr.arpa
+        # perform lookup and filter result
+        PTR_RECORD=$(dig ${DEFAULT_OPTIONS} ptr "${REVERSED_IP}" | tail -n1)
+        # test ANSWER to see if it is equal to "PTR" - if so, then there is no PTR found against this ip4 address
+        [ -z "${PTR_RECORD}" ] && PTR_RECORD="not defined"
+    else # Not an IPv4 Address - check to see if it is IPv6
+        ip_validation ${1}
+        [[ $? -ne 0 ]] && echo "Invalid IP Address" && usage
+        build_groups_array ${1}
+        expand_address
+        PTR_RECORD=$(dig ${DEFAULT_OPTIONS} ptr "${REVERSED_IP}" | tail -n1)
+        # test ANSWER to see if it is equal to "PTR" - if so, then there is no PTR found against this ip6 address
+        [ -z "${PTR_RECORD}" ] && PTR_RECORD="not defined"
+    fi
+
 }
 
 # Run an RBL check against the web-server/A-record IP of the domain.
@@ -379,10 +387,118 @@ function fallbackLookup() {
     local FBLKUP=$(dig +time=5 +tries=3 +short "${2}" "${1}" @${3})
     if [[ "${FBLKUP}" =~ (timed out|unreachable|NXDOMAIN|not found) ]] || [ -z "${FBLKUP}" ]; then
         echo "NONE"
-else echo "${FBLKUP}"; fi
+    else echo "${FBLKUP}"; fi
+}
+################################################################
+######################  IPv6 Functions  ########################
+################################################################
+
+# Counts the number of groups given in the ipv6 address
+# ARGS:
+#   $1 = IPv6 Address.
+count_groups() {
+    local groups=$(echo ${1} | tr ':' ' ' | wc -w)
+    # ensure there are no more than 8 groups
+    [[ ${groups} -gt 8 ]] && echo "Too Many Groups Detected" && return 1
+    [[ ${groups} -lt 1 ]] && echo "Not Enough Groups Detected" && return 1
+    # set global group count var and return
+    GROUP_COUNT=${groups}
+    return 0
 }
 
+# Checks the validity of the given IPv6 Address
+# Only Base 16 digits and {:|::} are allowed
+# ARGS:
+#   $1 = IPv6 Address
+ip_validation() {
+    [[ ! ${1} =~ ^[0-9a-fA-F\:]+$ || ${1} =~ [\:]{3} || $(echo ${1} | grep "::" -o | wc -l) -gt 1 ]] \
+        && return 1
+    # group count 
+    count_groups ${1}
+    [[ $? -ne 0 ]] && return 1
+    return 0
+}
 
+# Sets the value of ZERO_START to be the start of the zeros
+# Sets the value of ZERO_END to be the end of the zeros
+# ARGS:
+#   $1 = IPv6 Address
+find_zeros() {
+    # group count = 8 indicates that there is no :: in the address
+    if [[ ${GROUP_COUNT} -ne 8 ]]; then
+        # find location of :: and save in ZERO_START variable
+        for ((i=0; i < 8; i += 1)); do
+            local group=$(echo ${1} | cut -d: -f$((${i}+1)))
+            # this line performs the array front-load
+            GROUPS_ARRAY[${i}]=${group}
+            # ZERO_START is the first group that reads as an empty string, ZERO_END = (MAX_GROUPS - GROUP_COUNT + ZERO_START)
+            [[ ${group} == "" ]] && ZERO_START=$((${i})) && ZERO_END=$((8-${GROUP_COUNT}+${ZERO_START})) && return 0
+        done
+    fi
+}
+
+# ARGS:
+#   $1 = IPv6 Address
+build_groups_array() {
+    find_zeros ${1}
+    local offset=-1 # offset is used to offset cut fields after zeros have been written to the array
+    # fill an indexed array with the groups
+    for ((i=0; i < 8; i += 1)); do
+        if [[ (${i} -ge ${ZERO_START} && ${i} -lt ${ZERO_END}) ]]; then
+            GROUPS_ARRAY[${i}]='0000'
+            ((offset++))
+            continue
+        fi
+        # fill an indexed array with the groups
+        if [[ ${offset} -eq -1 ]]; then
+            local group=$(echo ${1} | cut -d: -f$((${i}+1)))
+        else 
+            local group=$(echo ${1} | cut -d: -f$((${i}+1-${offset})))
+        fi
+        GROUPS_ARRAY[${i}]=${group}
+    done
+    # test for ::nnnn (edge case)
+    [[ ${1} =~ ^::[0-9a-fA-F]{1,4}$ && ${i} -eq 8 ]] && GROUPS_ARRAY[7]=$(echo ${1} | cut -d: -f3)
+    # rewrite elements to be 4 chars long each
+    for ((i=0; i < 8; i += 1)); do
+        expand_group ${GROUPS_ARRAY[${i}]} ${i}
+    done
+}
+
+# Expands an IPv6 group to 4 digits
+# ARGS:
+#   $1 = group
+#   $2 = group array index
+expand_group() {
+    local zeros_to_add=$((4-$(echo -n ${1} | wc -m)))
+    for ((n=0; n < ${zeros_to_add}; n += 1)); do
+        local new_group="${new_group}0"
+    done
+    local new_group="${new_group}${1}"
+    GROUPS_ARRAY[${2}]=${new_group}
+}
+
+# Expands and delimits an IPv6 Address, then reverses it to be used for PTR lookups
+expand_address() {
+    delimit_address
+    reverse_address
+}
+ 
+# Reverses an expanded and delimited IPv6 Address and append .ip6.arpa.
+reverse_address() {
+    REVERSED_IP=$(echo "$(echo ${FULL_IP} | tac -s. | sed 's,.$,,').ip6.arpa." | tr -d '\n')
+}
+
+# Delimits an expanded IPv6 Address with '.'
+delimit_address() {
+    FULL_IP=
+    # iterate over the array and concatenate each element into one string
+    for ((i=0; i < 8; i += 1)); do
+        FULL_IP="${FULL_IP}${GROUPS_ARRAY[${i}]}"
+    done
+    # add . between each digit
+    FULL_IP=$(echo ${FULL_IP} | sed 's,.,&.,g')
+}
 
 ################################################################
 ################################################################
