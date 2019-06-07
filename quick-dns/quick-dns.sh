@@ -201,7 +201,17 @@ function getSPF() {
     (checkFallbackLookup "$SPF_RECORD") || SPF_RECORD=$(fallbackLookup "${DOMAIN}" "txt" "1.1.1.1")
     SPF_RECORD=$(echo "${SPF_RECORD}" | grep -i "v=spf1")
     [ -z "$SPF_RECORD" ] && SPF_RECORD="NONE"
-    echo "${TC_CYAN}SPF Record${TC_NORMAL}: ${SPF_RECORD}"
+    if [[ $(echo ${SPF_RECORD} | wc -l) -gt 1 ]]; then
+        echo "${TC_CYAN}WARNING${TC_NORMAL}: Multiple SPF Records Found! There should only be 1 SPF Record per domain."
+        SPF_RECORD=$(echo ${SPF_RECORD} | tr '\n' ';' | sed 's,;$,,')
+        oldIFS=${IFS} && IFS=';' read -ra SPF_RECORD <<< ${SPF_RECORD}
+        for i in "${!SPF_RECORD[@]}"; do
+            echo -e "${TC_CYAN}SPF Record ($((${i}+1)))${TC_NORMAL}:\t${SPF_RECORD[${i}]}"
+        done
+        IFS=${oldIFS}
+    else 
+        echo -e "${TC_CYAN}SPF Record${TC_NORMAL}:\t${SPF_RECORD}"
+    fi
 }
 
 # Get the DMARC record for the domain.
