@@ -270,10 +270,10 @@ function getPTR() {
     # reverse IP address and append '.in-addr.arpa' and store separately to filter result
     local REVERSE_IP=$(printf %s "${1}." | tac -s.)in-addr.arpa
     # perform lookup and filter result
-    local ANSWER=$(dig ${DEFAULT_OPTIONS} -x "${1}" | tail -n1)
+    PTR_RECORD=$(dig ${DEFAULT_OPTIONS} -x "${1}" | tail -n1)
     # test ANSWER to see if it is equal to "PTR" - if so, then there is no PTR found against this ip4 address
-    [ -z "${ANSWER}" ] && echo -e "\tNo PTR Record found for ${1}..." && return
-    echo -e "\t${TC_PURPLE}PTR Record${TC_NORMAL}:\t${ANSWER}"
+    [ -z "${PTR_RECORD}" ] && PTR_RECORD="not defined"
+    #echo -e "\t${TC_PURPLE}PTR Record${TC_NORMAL}:\t${ANSWER}"
 }
 
 # Run an RBL check against the web-server/A-record IP of the domain.
@@ -289,9 +289,10 @@ function RBL_getALookup() {
         # As long as the IP hasn't already been checked by RBLs, proceed.
         ## Otherwise, skip with a notification.
         echo "Attempting A-record RBL check for ${A_RECORD}..."
+        getPTR ${A_RECORD}
+        echo "  --========--   ${TC_BOLD}${TC_PURPLE}${A_RECORD}${TC_NORMAL} (PTR: ${PTR_RECORD})    --========--  "
         if [[ -z `echo "${RBL_CHECKED_IPS}" | grep -Poi "${A_RECORD}"` ]]; then
             lookupIP "${A_RECORD}" "b.barracudacentral.org" "Barracuda RBL"
-            getPTR ${A_RECORD}
             RBL_CHECKED_IPS="${RBL_CHECKED_IPS} ${A_RECORD}"
         else echo "IP ${A_RECORD} has already been checked. Skipping."; fi
     fi
