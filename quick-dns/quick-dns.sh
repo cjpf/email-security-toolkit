@@ -83,7 +83,7 @@ function quickDNS_main() {
     # Begin the main loop.
     for fqdn in ${DOMAINS[@]}; do
         # Run the script for a domain. Start by resetting variables and then crunching the DNS.
-        clearVars "NAME_SERVER SPF_RECORD DMARC_RECORD MX_RECORD_OUT MX_RECORDS A_RECORD MX_IP_LIST"
+        clearVars "NAME_SERVER SPF_RECORD DMARC_RECORD MX_RECORD_OUT MX_RECORDS A_RECORD MX_IP_LIST PTR_RECORD FULL_IP REVERSED_IP"
         DOMAIN="${fqdn}"
         printBanner "${fqdn}"
 
@@ -315,8 +315,8 @@ function RBL_getMXLookup() {
 #    $1 = Target IP Address
 function checkAllRBLs() {
     # Extract the PTR record from the IP address. If not defined, default.
-    local PTR_RECORD=$(getPTR ${1} | grep -Poi '[a-z0-9\-\.]+\.[a-z]{2,}\.?$')
-    [ -z "${PTR_RECORD}" ] && local PTR_RECORD="not defined"
+    getPTR ${1}
+    [ -z "${PTR_RECORD}" ] && PTR_RECORD="not defined"
     # Start the output of the RBL checks.
     echo "  --========--   ${TC_BOLD}${TC_PURPLE}${1}${TC_NORMAL} (PTR: ${PTR_RECORD})    --========--  "
     [[ -n `echo "${RBL_CHECKED_IPS}" | grep -Poi "${1}"` ]] \
