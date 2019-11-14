@@ -27,6 +27,10 @@
 #  this program. If not, see https://www.gnu.org/licenses/.
 ######################################################################################
 
+# Include common functions.
+source ../common/common.sh
+
+
 
 # Main function for the script, where the actual actions are taken.
 function quickDNS_main() {
@@ -133,24 +137,6 @@ function printBanner() {
     echo "Checking DNS information for ${TC_BOLD}${TC_YELLOW}${1}${TC_NORMAL}..."
 }
 
-# Set up the terminal color variables, if supported.
-## An optional argument of ANY value is passed to this function to disable colors altogether.
-function colors() {
-    [ -n "$1" ] && return
-    # Set up colors, if they're supported by the current terminal.
-    COLORS=$(tput colors 2>/dev/null)
-    if [ -n "$COLORS" ]; then
-        TC_RED=`tput setaf 1 2>/dev/null`
-        TC_GREEN=`tput setaf 2 2>/dev/null`
-        TC_YELLOW=`tput setaf 3 2>/dev/null`
-        TC_BLUE=`tput setaf 4 2>/dev/null`
-        TC_PURPLE=`tput setaf 5 2>/dev/null`
-        TC_CYAN=`tput setaf 6 2>/dev/null`
-        TC_NORMAL=`tput sgr0 2>/dev/null`
-        TC_BOLD=`tput bold 2>/dev/null`
-    fi
-}
-
 # Check for the necessary commands that aren't native to all Linux/UNIX systems.
 # ARGS:
 #   $1 = string of space-separated dependencies.
@@ -208,7 +194,7 @@ function getSPF() {
             echo -e "${TC_CYAN}SPF Record ($((${i}+1)))${TC_NORMAL}:\t${SPF_RECORD[${i}]}"
         done
         IFS=${oldIFS}
-    else 
+    else
         echo -e "${TC_CYAN}SPF Record${TC_NORMAL}:\t${SPF_RECORD}"
     fi
 }
@@ -413,7 +399,7 @@ count_groups() {
 ip_validation() {
     [[ ! ${1} =~ ^[0-9a-fA-F\:]+$ || ${1} =~ [\:]{3} || $(echo ${1} | grep "::" -o | wc -l) -gt 1 ]] \
         && return 1
-    # group count 
+    # group count
     count_groups ${1}
     [[ $? -ne 0 ]] && return 1
     return 0
@@ -452,7 +438,7 @@ build_groups_array() {
         # fill an indexed array with the groups
         if [[ ${offset} -eq -1 ]]; then
             local group=$(echo ${1} | cut -d: -f$((${i}+1)))
-        else 
+        else
             local group=$(echo ${1} | cut -d: -f$((${i}+1-${offset})))
         fi
         GROUPS_ARRAY[${i}]=${group}
@@ -483,7 +469,7 @@ expand_address() {
     delimit_address
     reverse_address
 }
- 
+
 # Reverses an expanded and delimited IPv6 Address and append .ip6.arpa.
 reverse_address() {
     REVERSED_IP=$(echo "$(echo ${FULL_IP} | tac -s. | sed 's,.$,,').ip6.arpa." | tr -d '\n')

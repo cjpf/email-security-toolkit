@@ -29,7 +29,14 @@
 #  this program. If not, see https://www.gnu.org/licenses/.
 ######################################################################################
 
+# Include common functions.
+source ../common/common.sh
 
+
+# main function (scaffolding)
+function DKIMVerify_main() {
+  :
+}
 
 # usage
 # -- Display general usage and help for the script.
@@ -45,23 +52,6 @@ function usage() {
 function cleanup() {
   rm -f /tmp/dkim-verify-$$*
   [ -f /tmp/dkim-verify-email-$$ ] && rm -f /tmp/dkim-verify-email-$$
-}
-
-# colors
-# -- Initialize terminal colors, if enabled.
-function colors() {
-  [ -n "$1" ] && return
-  COLORS=$(tput colors 2>/dev/null)
-  if [ -n "${COLORS}" ]; then
-    TC_RED=`tput setaf 1 2>/dev/null`
-    TC_GREEN=`tput setaf 2 2>/dev/null`
-    TC_YELLOW=`tput setaf 3 2>/dev/null`
-    TC_BLUE=`tput setaf 4 2>/dev/null`
-    TC_PURPLE=`tput setaf 5 2>/dev/null`
-    TC_CYAN=`tput setaf 6 2>/dev/null`
-    TC_NORMAL=`tput sgr0 2>/dev/null`
-    TC_BOLD=`tput bold 2>/dev/null`
-  fi
 }
 
 # initialize
@@ -81,32 +71,9 @@ function initialize() {
   for needed in ${DEPENDENCIES[@]}; do
     command -v $needed 2>&1 >/dev/null
     if [ $? -ne 0 ]; then
-      errorOutput "Missing dependency command \"${needed}\". Please install this on your local machine and try again." 255
+      outputError "Missing dependency command \"${needed}\". Please install this on your local machine and try again." 255
     fi
   done
-}
-
-# errorOutput
-# -- Output an error to the terminal and exit with the given code.
-# PARAMS: 1 = Accompanying string, 2 = Exit code
-function errorOutput() {
-  echo "${TC_BOLD}${TC_RED}ERROR${TC_NORMAL}: $1"
-  exit $2
-}
-
-# outputResult
-# -- Predefine a template for indicating the PASS/FAIL state of a part of the signature.
-# PARAMS: 1 = Description, 2 = (0) PASS, (1) FAIL
-function outputResult() {
-  printf " +===== $1 [${TC_BOLD}"
-  [ $2 -eq 0 ] && printf "${TC_GREEN}PASS" || printf "${TC_RED}FAIL"
-  echo "${TC_NORMAL}]"
-}
-
-# outputInfo
-# -- Output the given info along the way during a calculation.
-function outputInfo() {
-  echo " +\`---> $1"
 }
 
 # extractSignature
@@ -140,7 +107,7 @@ function extractSignature() {
   # Output the clean version of the Signature, then crunch it before leaving.
   echo "${DKIM_SIGNATURE}" | \
   while read -r line || [[ -n "${line}" ]]; do
-    outputInfo "  ${line}"
+    outputInfo "  ${line}" "+"
   done
   DKIM_SIGNATURE_SIMPLE="${DKIM_SIGNATURE}"
   DKIM_SIGNATURE=$(echo "${DKIM_SIGNATURE}" | tr '\n' ' ' | sed -r 's/\s+|\t+//g')
@@ -301,7 +268,7 @@ function canonicalizeHeader() {
     rm $TEMP_OUT
   else
     # The given canonicalization header doesn't match either above. This shouldn't ever happen.
-    errorOutput "${TC_RED}PERMFAIL${TC_NORMAL}: The canonicalization method for the header (${DKIM_CANON_HEADER}) isn't valid." 255
+    outputError "${TC_RED}PERMFAIL${TC_NORMAL}: The canonicalization method for the header (${DKIM_CANON_HEADER}) isn't valid." 255
   fi
 }
 
@@ -387,7 +354,7 @@ trap cleanup EXIT
 ### This is mostly called from the DMARC script to check for domain alignment.
 if [[ "$2" == "--get-domain" ]]; then
     # ... but verification is still needed.
-    [ ! -f "$1" ] && errorOutput "Please provide a valid file!" 1
+    [ ! -f "$1" ] && outputError "Please provide a valid file!" 1
     cp "$1" "/tmp/dkim-verify-email-$$"
     EMAIL_FILE="/tmp/dkim-verify-email-$$"
     extractSignature "${EMAIL_FILE}" 2>&1 >/dev/null
@@ -398,7 +365,7 @@ fi
 
 # Test given parameters...
 [[ "$1" =~ '^--?h(elp)?$' ]] && usage
-[ ! -f "$1" ] && errorOutput "Please provide a valid file!" 1
+[ ! -f "$1" ] && outputError "Please provide a valid file!" 1
 cp "$1" "/tmp/dkim-verify-email-$$"
 EMAIL_FILE="/tmp/dkim-verify-email-$$"
 # Shift the filename parameter out of the way to process the OPTIONS field, if any.
@@ -421,7 +388,7 @@ initialize
 # Extract the DKIM Signature from the message.
 echo " +++ Extracting DKIM-Signature from the message..."
 extractSignature "${EMAIL_FILE}"
-[ $? -eq 1 ] && errorOutput "${TC_RED}PERMFAIL${TC_NORMAL}: Failed to find DKIM-Signature header." 2
+[ $? -eq 1 ] && outputError "${TC_RED}PERMFAIL${TC_NORMAL}: Failed to find DKIM-Signature header." 2
 
 
 # Get the selector (s=) field and the domain (d=) field.
@@ -433,14 +400,14 @@ getPubkey "${DKIM_SELECTOR}" "${DKIM_DOMAIN}" 2>&1 >/dev/null
 # Use the retcode now AND later when using the signature on the canon. headers
 PUBKEY_RETCODE=$?
 if [ "${PUBKEY_RETCODE}" -eq 1 ]; then
-  errorOutput "${TC_RED}TEMPFAIL${TC_NORMAL}: Failed to find DNS TXT record for selector \"${DKIM_SELECTOR}\" at domain \"${DKIM_DOMAIN}\"." 3
+  outputError "${TC_RED}TEMPFAIL${TC_NORMAL}: Failed to find DNS TXT record for selector \"${DKIM_SELECTOR}\" at domain \"${DKIM_DOMAIN}\"." 3
 elif [ "$PUBKEY_RETCODE" -eq 2 ]; then
-  errorOutput "${TC_RED}TEMPFAIL${TC_NORMAL}: Found TXT record, but no public key (p=), for selector \"${DKIM_SELECTOR}\" at domain \"${DKIM_DOMAIN}\"." 3
+  outputError "${TC_RED}TEMPFAIL${TC_NORMAL}: Found TXT record, but no public key (p=), for selector \"${DKIM_SELECTOR}\" at domain \"${DKIM_DOMAIN}\"." 3
 elif [ "$PUBKEY_RETCODE" -eq 3 ]; then
-  errorOutput "${TC_RED}TEMPFAIL${TC_NORMAL}: Found pubkey in selector record, but it is not a valid RSA key encoded in Base64." 3
+  outputError "${TC_RED}TEMPFAIL${TC_NORMAL}: Found pubkey in selector record, but it is not a valid RSA key encoded in Base64." 3
 fi
 # This is here like this in case I change the 'if' above AGAIN.
-outputResult "Public Key Valid" "${VALID_PUBKEY}"
+outputResult "Public Key Valid" "+" "${VALID_PUBKEY}"
 
 
 # Split up the email into headers vs. body.
@@ -450,29 +417,29 @@ getEmailSections
 # Get the Canonicalization type and canonicalize.
 echo " +++ Getting the canonicalization types and performing canonicalization..."
 getSigCanon
-outputInfo "Canonicalization Used: ${TC_PURPLE}${DKIM_CANON_HEADER}${TC_NORMAL} (header)/${TC_PURPLE}${DKIM_CANON_BODY}${TC_NORMAL} (body)"
+outputInfo "Canonicalization Used: ${TC_PURPLE}${DKIM_CANON_HEADER}${TC_NORMAL} (header)/${TC_PURPLE}${DKIM_CANON_BODY}${TC_NORMAL} (body)" "+"
 # Set up the CANON_HEADERS and CANON_BODY variables.
-outputInfo "Sanitizing and parsing message header.  "
+outputInfo "Sanitizing and parsing message header.  " "+"
 canonicalizeHeader
-outputInfo "Sanitizing and parsing message body.  "
+outputInfo "Sanitizing and parsing message body.  " "+"
 canonicalizeBody
 [[ -z "${CANON_BODY}" || -z "${CANON_HEADERS}" ]] && \
-  errorOutput "${TC_RED}PERMFAIL${TC_NORMAL}: Could not canonicalize the message. Reason unknown." 4
-outputResult "Headers & Body Canonicalized" 0
+  outputError "${TC_RED}PERMFAIL${TC_NORMAL}: Could not canonicalize the message. Reason unknown." 4
+outputResult "Headers & Body Canonicalized" "+" 0
 
 
 # Interpret the Body Hash.
 echo " +++ Interpreting and verifying the Body Hash (bh) field of the signature..."
 DKIM_BODYHASH=$(getField "bh")
 calcBodyHash
-outputInfo "Extracted Body Hash:  ${TC_YELLOW}${DKIM_BODYHASH}${TC_NORMAL}"
-outputInfo "Calculated Body Hash: ${TC_YELLOW}${CALC_BODY_HASH}${TC_NORMAL}"
+outputInfo "Extracted Body Hash:  ${TC_YELLOW}${DKIM_BODYHASH}${TC_NORMAL}" "+"
+outputInfo "Calculated Body Hash: ${TC_YELLOW}${CALC_BODY_HASH}${TC_NORMAL}" "+"
 # Compare the two strings for a match and output the result to the terminal.
 # -- RFC standard is to PERMFAIL if the Body Hash doesn't verify, because the Body Hash is used in the next step.
 if [[ "${DKIM_BODYHASH}" == "${CALC_BODY_HASH}" ]]; then
-  outputResult "Body Hash Match" 0
+  outputResult "Body Hash Match" "+" 0
 else
-  errorOutput "${TC_RED}PERMFAIL${TC_NORMAL}: The Body Hash did not verify successfully. Signature is not valid!" 5
+  outputError "${TC_RED}PERMFAIL${TC_NORMAL}: The Body Hash did not verify successfully. Signature is not valid!" 5
 fi
 
 
@@ -482,8 +449,8 @@ DKIM_HEADER_SIGNATURE=$(getField "b")
 TEMP_OUT="/tmp/dkim-verify-$$"
 # Decode the Base64 signature.
 echo "${DKIM_HEADER_SIGNATURE}" | base64 -di >$TEMP_OUT 2>/dev/null
-[ $? -ne 0 ] && errorOutput "${TC_RED}PERMAIL${TC_NORMAL}: Bad Base64 in the \"b\" tag of the DKIM-Signature header." 16
-outputInfo "Base64 decoded."
+[ $? -ne 0 ] && outputError "${TC_RED}PERMAIL${TC_NORMAL}: Bad Base64 in the \"b\" tag of the DKIM-Signature header." 16
+outputInfo "Base64 decoded." "+"
 # Multipart step:
 # - Decrypt the hash with OpenSSL's RSA utility.
 # - Get the final two lines, cut at the '-' symbols and get fields 2&3.
@@ -493,8 +460,8 @@ DKIM_HEADER_HASH=$(openssl rsautl -inkey ${PUBKEY_FILE} -pubin -in ${TEMP_OUT} -
   | tail -2 | cut -d'-' -f2,3 \
   | sed -r 's/\s{2,}.*?$//g' | sed -r 's/(\s|-)//g' | tr -d '\n')
 [[ "${DKIM_HEADER_SIGNATURE}" =~ '[^0-9a-zA-Z]' || -z "${DKIM_HEADER_HASH}" ]] && \
-  errorOutput "${TC_RED}PERMFAIL${TC_NORMAL}: Could not decrypt or decipher the header hash value from the \"b\" tag." 15
-outputInfo "Header hash decrypted successfully."
+  outputError "${TC_RED}PERMFAIL${TC_NORMAL}: Could not decrypt or decipher the header hash value from the \"b\" tag." 15
+outputInfo "Header hash decrypted successfully." "+"
 
 echo " +++ Calculating header hash locally..."
 # Test the extracted hash (decrypted w/ public key above) against the headers.
@@ -502,9 +469,9 @@ DKIM_SIGNED_HEADERS=$(getField "h" |tr ':' ' ' | sed -r 's/\s+/ /g')
 DKIM_SIGNED_HEADERS_TEST=$(echo "${DKIM_SIGNED_HEADERS}" | tr '[:upper:]' '[:lower:]')
 # Make sure the headers contain SOMETHING besides whitespace.
 [ -z "${DKIM_SIGNED_HEADERS}" ] && \
-  errorOutput "${TC_RED}PERMFAIL${TC_NORMAL}: The \"h\" field is empty, there is nothing to sign! This goes against RFC 6367."
+  outputError "${TC_RED}PERMFAIL${TC_NORMAL}: The \"h\" field is empty, there is nothing to sign! This goes against RFC 6367."
 if ! [[ "${DKIM_SIGNED_HEADERS_TEST}" == *"from"* ]]; then
-  errorOutput "${TC_RED}PERMFAIL${TC_NORMAL}: The \"h\" field does not contain the From header as required by RFC 6367. Signature is not valid!"
+  outputError "${TC_RED}PERMFAIL${TC_NORMAL}: The \"h\" field does not contain the From header as required by RFC 6367. Signature is not valid!"
 fi
 
 # Reverse the header order.
@@ -541,14 +508,14 @@ CALC_HEADER_HASH=$(`echo ${HASH_ALG}`sum /tmp/tempfile_gen | cut -d' ' -f1)
 rm /tmp/tempfile*
 
 # Output results.
-outputInfo "Extracted Header Hash:  ${TC_CYAN}${DKIM_HEADER_HASH}${TC_NORMAL}"
-outputInfo "Calculated Header Hash: ${TC_CYAN}${CALC_HEADER_HASH}${TC_NORMAL}"
+outputInfo "Extracted Header Hash:  ${TC_CYAN}${DKIM_HEADER_HASH}${TC_NORMAL}" "+"
+outputInfo "Calculated Header Hash: ${TC_CYAN}${CALC_HEADER_HASH}${TC_NORMAL}" "+"
 # Compare the two strings for a match and output the result to the terminal.
 # -- RFC standard is to PERMFAIL if the Hash doesn't verify; it's the primary signature.
 if [[ "${DKIM_HEADER_HASH}" == "${CALC_HEADER_HASH}" ]]; then
-  outputResult "Header Hash Match" 0
+  outputResult "Header Hash Match" "+" 0
 else
-  errorOutput "${TC_RED}PERMFAIL${TC_NORMAL}: The Header Hash did not verify successfully. Signature is not valid!" 5
+  outputError "${TC_RED}PERMFAIL${TC_NORMAL}: The Header Hash did not verify successfully. Signature is not valid!" 5
 fi
 
 # Successful exit.

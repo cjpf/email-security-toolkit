@@ -28,6 +28,8 @@
 #  this program. If not, see https://www.gnu.org/licenses/.
 ######################################################################################
 
+# Import common functions.
+source ../common/common.sh
 
 
 # main function
@@ -99,38 +101,6 @@ function usage() {
 # -- Clean up any temporary files with a trap. This may not be needed but is scaffolding.
 function cleanup() {
     :
-}
-
-# colors
-# -- Initialize terminal colors, if enabled.
-## An optional argument of ANY value is passed to this function to disable colors altogether.
-function colors() {
-    [ -n "$1" ] && return
-    COLORS=$(tput colors 2>/dev/null)
-    if [ -n "${COLORS}" ]; then
-        TC_RED=`tput setaf 1 2>/dev/null`
-        TC_GREEN=`tput setaf 2 2>/dev/null`
-        TC_YELLOW=`tput setaf 3 2>/dev/null`
-        TC_BLUE=`tput setaf 4 2>/dev/null`
-        TC_PURPLE=`tput setaf 5 2>/dev/null`
-        TC_CYAN=`tput setaf 6 2>/dev/null`
-        TC_NORMAL=`tput sgr0 2>/dev/null`
-        TC_BOLD=`tput bold 2>/dev/null`
-    fi
-}
-
-# errorOutput
-# -- Output an error to the terminal and exit with the given code.
-# PARAMS: 1 = Accompanying string, 2 = Exit code
-function errorOutput() {
-  echo "${TC_BOLD}${TC_RED}ERROR${TC_NORMAL}: $1"
-  exit $2
-}
-
-# outputInfo
-# -- Output the given info along the way during a calculation.
-function outputInfo() {
-  echo " \`---> $1"
 }
 
 # initialize
@@ -224,7 +194,7 @@ function getField() {
 function getDMARCDomain() {
     # Grep out the top-most From header, and grab the domain after the @ symbol.
     DMARC_DOMAIN=$(grep -Poi '^From:.*?$' ${EMAIL_FILE} | head -n1 | sed -r 's/.*?\@([0-9a-z\.\-]+[a-z]{2,})>?\s*$/\1/gi')
-    [ -z "${DMARC_DOMAIN}" ] && errorOutput "The top-most \"From\" header doesn't have a valid FQDN." 2
+    [ -z "${DMARC_DOMAIN}" ] && outputError "The top-most \"From\" header doesn't have a valid FQDN." 2
 }
 
 # getDMARCRecord
@@ -236,7 +206,7 @@ function getDMARCRecord() {
         # Retry the query against a public DNS.
         DMARC_RECORD=$(dig txt +short ${QUERY_STR} @1.1.1.1)
         [ -z "${DMARC_RECORD}" ] \
-            && errorOutput "The domain ${TC_CYAN}${DMARC_DOMAIN}${TC_NORMAL} does not have a valid DMARC record." 3
+            && outputError "The domain ${TC_CYAN}${DMARC_DOMAIN}${TC_NORMAL} does not have a valid DMARC record." 3
     fi
     # Clean up the record:
     DMARC_RECORD=$(echo "${DMARC_RECORD}" | tr -d '\n' | sed -r 's/\\|\s+|\t+|\"//g')
@@ -247,15 +217,15 @@ function getDMARCRecord() {
 function parseDMARCRecord() {
     # According to the RFC, the "v" tag must be the first value, is case-sensitive, and must equal "DMARC1".
     [[ -z `echo "${DMARC_RECORD}" | grep -Po '^v=DMARC1'` ]] \
-        && errorOutput "DMARC Record doesn't include a proper \"version\" tag (v=DMARC1)." 4
+        && outputError "DMARC Record doesn't include a proper \"version\" tag (v=DMARC1)." 4
     DMARC_VERSION=$(getField "v")
     [[ ! "${DMARC_VERSION}" == "DMARC1" ]] \
-        && errorOutput "DMARC Record doesn't include a proper \"version\" tag (v=DMARC1)." 4
+        && outputError "DMARC Record doesn't include a proper \"version\" tag (v=DMARC1)." 4
 
     # The next mandatory field is the "p" tag.
     DMARC_ACTION=$(getField "p")
     [[ -z `echo "${DMARC_ACTION}" | grep -Poi '^(none|reject|quarantine)$'` ]] \
-        && errorOutput "DMARC Record doesn't include a proper action in the \"p\" tag (none, reject, or quarantine)." 6
+        && outputError "DMARC Record doesn't include a proper action in the \"p\" tag (none, reject, or quarantine)." 6
 
     # "sp" tag: OPTIONAL; subdomain action.
     DMARC_SUB_ACTION=$(getField "sp")
