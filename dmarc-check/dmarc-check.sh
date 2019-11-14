@@ -32,7 +32,36 @@
 source ../common/common.sh
 
 
-# main function
+# usage
+# -- Display general usage and help for the script.
+function usage() {
+    echo "USAGE: $0 email-file [OPTIONS]"
+    echo "  Verify the DMARC pass/fail status of a raw email and explain"
+    echo "  the action taken as specified by the DMARC record."
+    echo
+    echo "OPTIONS:"
+    echo "  -v             Be verbose in output about the DMARC record, and about"
+    echo "                  the particulars of the email's alignment."
+    echo "  -a             Include outputs from both the DKIM and SPF verification."
+    echo "  -d             Show DKIM verification output."
+    echo "  -s             Show SPF verification output."
+    echo "  -n             Do not use colors in the output for the script."
+    echo
+    echo "NOTES:"
+    echo "  This script depends on \"dkim-verify.sh\", another script designed"
+    echo "   to validate DKIM-Signature headers, and \"spf-verify.sh\" to verify"
+    echo "   SPF sender authentication."
+    echo
+    echo "  These can be predefined in two variables respectively with \"export\":"
+    echo "    DKIM_VERIFY and SPF_VERIFY"
+    echo "  Otherwise the script will search for the scripts in the same directory."
+    echo "  And lastly, in two directories: ../dkim-verify/ and ../spf-verify/,"
+    echo "   which correspond to the structure of the email-security-toolkit project."
+    echo && exit 1
+}
+
+# DMARCcheck_main
+# -- Main function.
 function DMARCcheck_main() {
     # Immediately set up the trap for the cleanup function on exit.
     trap cleanup EXIT
@@ -69,34 +98,6 @@ function DMARCcheck_main() {
 
 
 
-# usage
-# -- Display general usage and help for the script.
-function usage() {
-    echo "USAGE: $0 email-file [OPTIONS]"
-    echo "  Verify the DMARC pass/fail status of a raw email and explain"
-    echo "  the action taken as specified by the DMARC record."
-    echo
-    echo "OPTIONS:"
-    echo "  -v             Be verbose in output about the DMARC record, and about"
-    echo "                  the particulars of the email's alignment."
-    echo "  -a             Include outputs from both the DKIM and SPF verification."
-    echo "  -d             Show DKIM verification output."
-    echo "  -s             Show SPF verification output."
-    echo "  -n             Do not use colors in the output for the script."
-    echo
-    echo "NOTES:"
-    echo "  This script depends on \"dkim-verify.sh\", another script designed"
-    echo "   to validate DKIM-Signature headers, and \"spf-verify.sh\" to verify"
-    echo "   SPF sender authentication."
-    echo
-    echo "  These can be predefined in two variables respectively with \"export\":"
-    echo "    DKIM_VERIFY and SPF_VERIFY"
-    echo "  Otherwise the script will search for the scripts in the same directory."
-    echo "  And lastly, in two directories: ../dkim-verify/ and ../spf-verify/,"
-    echo "   which correspond to the structure of the email-security-toolkit project."
-    echo && exit 1
-}
-
 # cleanup
 # -- Clean up any temporary files with a trap. This may not be needed but is scaffolding.
 function cleanup() {
@@ -104,7 +105,7 @@ function cleanup() {
 }
 
 # initialize
-# -- Set up the script environment. Mainly used to ensure dependencies are installed.
+# -- Set up the script environment. This function is critical to proper script operation.
 function initialize() {
     # Initialize/Blank some variables as needed.
     EMAIL_FILE=; VERBOSE=; NO_COLORS=;
@@ -133,6 +134,11 @@ function initialize() {
 
     # Initialize colors.
     colors "${NO_COLORS}"
+
+    # Check the required dependencies for this script and ensure the system has them available.
+    #  This will include self-dependencies and deps for the SPF and DKIM verification scripts.
+    #  All dependencies are defined in the 'common' library, for purposes of centralization and ease of reference.
+    checkDependencies "${DMARC_DEPS}"
 
     # This array needs to be defined after the colors are defined.
     PRINT_ALIGN=( \
@@ -174,21 +180,6 @@ function initialize() {
     fi
 }
 
-# printNeatly
-# -- Sub-function for neat printing.
-# PARAMS: 1 - Left column, 2 - Separator, 3 - Right column, 4 - Spread (spaces apart)
-function printNeatly() {
-    printf "%-${4}s ${2} %s\n" "${1}" "${3}"
-}
-
-# getField
-# -- Extract the value from the given tag.
-# PARAMS: 1 = tag name
-function getField() {
-    local RETVAL=$(echo "${DMARC_RECORD}" | grep -Poi '\b'"$1"'=.*?(;|$)' | sed -r 's/;.*//g' | head -n1)
-    echo "${RETVAL:`expr ${#1} + 1`:${#RETVAL}}"
-}
-
 # getDMARCDomain
 # -- Use the top-most Header-From field to get the target DMARC domain.
 function getDMARCDomain() {
@@ -218,17 +209,17 @@ function parseDMARCRecord() {
     # According to the RFC, the "v" tag must be the first value, is case-sensitive, and must equal "DMARC1".
     [[ -z `echo "${DMARC_RECORD}" | grep -Po '^v=DMARC1'` ]] \
         && outputError "DMARC Record doesn't include a proper \"version\" tag (v=DMARC1)." 4
-    DMARC_VERSION=$(getField "v")
+    DMARC_VERSION=$(getField "v" "${DMARC_RECORD}")
     [[ ! "${DMARC_VERSION}" == "DMARC1" ]] \
         && outputError "DMARC Record doesn't include a proper \"version\" tag (v=DMARC1)." 4
 
     # The next mandatory field is the "p" tag.
-    DMARC_ACTION=$(getField "p")
+    DMARC_ACTION=$(getField "p" "${DMARC_RECORD}")
     [[ -z `echo "${DMARC_ACTION}" | grep -Poi '^(none|reject|quarantine)$'` ]] \
         && outputError "DMARC Record doesn't include a proper action in the \"p\" tag (none, reject, or quarantine)." 6
 
     # "sp" tag: OPTIONAL; subdomain action.
-    DMARC_SUB_ACTION=$(getField "sp")
+    DMARC_SUB_ACTION=$(getField "sp" "${DMARC_RECORD}")
     DMARC_SUB_ACTION_DISPLAY="${DMARC_SUB_ACTION}"
     # Assumes that "sp" is defined.
     DMARC_SUB_DEFINED="YES"
@@ -245,7 +236,7 @@ function parseDMARCRecord() {
         && DMARC_SUB_DEFINED="NO"
 
     # "pct" tag: OPTIONAL; defaults to 100.
-    DMARC_PCT=$(getField "pct")
+    DMARC_PCT=$(getField "pct" "${DMARC_RECORD}")
     DMARC_PCT_DISPLAY="${DMARC_PCT}"
     [ -z "${DMARC_PCT}" ] && DMARC_PCT_DISPLAY="100 (default)" && DMARC_PCT="100"
     # Verify that it only consists of 1-3 numbers (1-100).
@@ -257,44 +248,44 @@ function parseDMARCRecord() {
     ### In relaxed mode any subdomain of d=domain (in the mail headers) will also be accepted. Thus if d=example.com
     ### in the mail header then mail from user@example.com will pass from either adkim = r or adkim=s, however, mail
     ### from user@a.example.com will fail if adkim=s but pass if adkim=r.
-    DMARC_ADKIM=$(getField "adkim")
+    DMARC_ADKIM=$(getField "adkim" "${DMARC_RECORD}")
     [[ -z `echo "${DMARC_ADKIM}" | grep -Po '^[rs]$'` ]] && DMARC_ADKIM="r"
 
     # "aspf" tag: OPTIONAL; defaults to "r" (relaxed)
     # In strict mode the domain.name in the MAIL FROM command (in SMTP) and the from: header (in the mail item) must
     ### match exactly. In relaxed mode any valid subdomain of domain.name is acceptable.
-    DMARC_ASPF=$(getField "aspf")
+    DMARC_ASPF=$(getField "aspf" "${DMARC_RECORD}")
     [[ -z `echo "${DMARC_ASPF}" | grep -Po '^[rs]$' ` ]] && DMARC_ASPF="r"
 
     # "fo" tag: OPTIONAL; defaults to "0".
     # Defines the error reporting policy the sending MTA requests from the receiving MTA. Multiple options may be defined
     ### using colon (:) separated values, for example, fo=0:s
-    DMARC_FO=$(getField "fo")
+    DMARC_FO=$(getField "fo" "${DMARC_RECORD}")
     [[ -z "${DMARC_FO}" || -z `echo "${DMARC_FO}" | grep -Poi '^[01ds]((:[01ds]){1,3})?$'` ]] && DMARC_FO="0"
 
     # "rf" tag: OPTIONAL; defaults to "afrf".
     # Defines the reporting format the sending MTA requests from the receiving MTA.
-    DMARC_RF=$(getField "rf")
+    DMARC_RF=$(getField "rf" "${DMARC_RECORD}")
     [[ -z "${DMARC_RF}" || -z `echo "${DMARC_RF}" | grep -Po '^(afrf|iodef)$'` ]] && DMARC_RF="afrf"
 
     # "ri" tag: OPTIONAL: defaults to "86400".
     # Defines the reporting interval in seconds. receivimg MTAs must be able to send daily (86400) reports and should be
     ### able to send hourly (3600) reports but on a best efforts basis. Implicitly anything less than 1 hour (3600) can be
     ### rounded up to 1 hour by the receiving MTA.
-    DMARC_RI=$(getField "ri")
+    DMARC_RI=$(getField "ri" "${DMARC_RECORD}")
     if [[ -z "${DMARC_RI}" || -z `echo "${DMARC_RI}" | grep -Po '^[0-9]{4,9}$'` ]]; then
         DMARC_RI="86400 (defaulted to daily)"
     else if [[ ${DMARC_RI} -le 3600 ]]; then DMARC_RI="3600 (rounded up)"; fi; fi
 
     # "rua" tag: OPTIONAL: defaults to not sending any aggregate reports if an address isn't defined.
-    DMARC_RUA=$(getField "rua")
+    DMARC_RUA=$(getField "rua" "${DMARC_RECORD}")
     ## It's not that important, no need to validate this. Just check whether or not it exist, and strip off mailto: URI objects.
     [[ -z "${DMARC_RUA}" ]] \
         && DMARC_RUA="Not defined, aggregate report emails will not be sent from receiving MTAs." \
         || DMARC_RUA=$(echo "${DMARC_RUA}" | sed 's/mailto://g')
 
     # "ruf" tag: OPTIONAL; defaults to not sending anything if not defined.
-    DMARC_RUF=$(getField "ruf")
+    DMARC_RUF=$(getField "ruf" "${DMARC_RECORD}")
     [[ -z "${DMARC_RUF}" ]] \
         && DMARC_RUF="Not defined, detailed failure-report emails will not be sent from receiving MTAs." \
         || DMARC_RUF=$(echo "${DMARC_RUF}" | sed 's/mailto://g')
@@ -341,14 +332,18 @@ function checkDKIMAlignment() {
         ${DKIM_VERIFY} ${EMAIL_FILE} 2>&1 >/dev/null
     else
         echo "${TC_BOLD}=============== RUNNING DKIM CHECK${TC_NORMAL}:"
-        [ -z "${NO_COLORS}" ] \
-            && ${DKIM_VERIFY} ${EMAIL_FILE} \
-            || ${DKIM_VERIFY} ${EMAIL_FILE} -n
+        if [ -z "${NO_COLORS}" ]; then
+            ${DKIM_VERIFY} ${EMAIL_FILE}
+            local RETCODE=$?
+        else
+            ${DKIM_VERIFY} ${EMAIL_FILE} -n
+            local RETCODE=$?
+        fi
         echo
     fi
-    local RETCODE=$?
+    # Get the d={domain} tag from the DKIM-Signature header to check alignment.
     local RETDOMAIN=$(${DKIM_VERIFY} ${EMAIL_FILE} --get-domain)
-
+    # Define a default verdict.
     local VERDICT=0
     # Check strict mode "s" for an exact domain match in the DKIM d= tag and the header-from.
     # Or, check relaxed mode "r" for the d= tag to be a subdomain of the header-from domain.
@@ -356,9 +351,10 @@ function checkDKIMAlignment() {
         [[ "${DMARC_ADKIM}" == "r" \
         && -n `echo "${RETDOMAIN}" | grep -Poi "${DMARC_DOMAIN}"'$'` ]]; then local VERDICT=${PASS_ALIGN};
     else local VERDICT=${PASS_NOALIGN}; fi
-    # If the DKIM verification failed, add 2 to the VERDICT variable.
+    # If the DKIM verification failed in any way, add 2 to the VERDICT variable.
     [[ ${RETCODE} -ne 0 ]] && local VERDICT=$(expr ${VERDICT} + 2)
 
+    # All done, set the DKIM verdict.
     DKIM_ALIGN=${VERDICT}
 }
 
