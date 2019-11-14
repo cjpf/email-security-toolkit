@@ -6,9 +6,10 @@ If you want to shadow this output to another file, use the "tee" command like so
 
 ## TODO
 Miscellaneous things to improve upon in this tool.
++ [ ] **COMPLETE OVERHAUL** -- Since this script was just sort of 'appended' to this toolkit, it needs to be better-embraced and conform to the way the other tools display their output and process information.
 + [ ] Generate a report of _only_ either supported or unsupported cipher suites, with a command-line parameter. Something like `-u filename` for a list of unsupported ciphers, or `-U filename` for supported ciphers, output into `filename`.
 + [ ] Test a specific cipher or protocol suite via command-line option.
-+ [ ] Option to generate a CSV indicating support or lack of support for each cipher. Something in a format like `cipher,[supported,unsupported]`.
++ [ ] Option to generate a CSV indicating support or lack of support for each cipher. Something in a format like `cipher,[supported,unsupported]`. This would do wonders for automating reports.
 
 ## Sample Bash Output
 ```
