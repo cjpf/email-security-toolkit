@@ -58,6 +58,8 @@ function usage() {
 # -- Main function for the script, where all of the processing is done.
 function DKIMVerify_main() {
     # ===== SETUP =====
+    # If the EMAIL_SECURITY_COMMON import isn't defined, then the common functions are not available. Exit!
+    [ -z "${EMAIL_SECURITY_COMMON}" ] && echo "The script could not import the required common library, and therefore could not run. Aborting." && exit 1
     # Immediately set up the trap for the cleanup function on exit.
     trap cleanup EXIT
     # Check if the second argument to the script is '--get-domain'.
@@ -513,9 +515,9 @@ function calcHeaderHash() {
     # Make sure the headers contain SOMETHING besides whitespace, and that "from" is included in the signed-headers.
     #  NOTE: The _TEST variable isn't necessary, as ^^ could be used to translate the variable to upper-case. Keeping anyway.
     if [ -z "${DKIM_SIGNED_HEADERS// /}" ]; then
-        outputError "${TC_RED}PERMFAIL${TC_NORMAL}: The \"h\" field is empty, there is nothing to sign! This goes against RFC 6367."
+        outputError "${TC_RED}PERMFAIL${TC_NORMAL}: The \"h\" field is empty, there is nothing to sign! This goes against RFC 6367." 32
     elif ! [[ "${DKIM_SIGNED_HEADERS_TEST}" == *"from"* ]]; then
-        outputError "${TC_RED}PERMFAIL${TC_NORMAL}: The \"h\" field does not contain the From header as required by RFC 6367. Signature is not valid!"
+        outputError "${TC_RED}PERMFAIL${TC_NORMAL}: The \"h\" field does not contain the From header as required by RFC 6367. Signature is not valid!" 32
     fi
     # Output the headers to a file, cat it into a perl reverse, and store the result into the same temporary file.
     #  This is effectively turning the headers last-first in order (reversing their order).

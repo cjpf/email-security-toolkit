@@ -45,6 +45,8 @@ source ../common/common.sh
 
 # main function
 function SPFVerify_main() {
+    # If the EMAIL_SECURITY_COMMON import isn't defined, then the common functions are not available. Exit!
+    [ -z "${EMAIL_SECURITY_COMMON}" ] && echo "The script could not import the required common library, and therefore could not run. Aborting." && exit 1
     # Immediately set up the trap for the cleanup function on exit.
     trap cleanup EXIT
     # Set up the environment with a clean slate, and verify passed arguments.

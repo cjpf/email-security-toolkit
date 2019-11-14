@@ -63,6 +63,8 @@ function usage() {
 # DMARCcheck_main
 # -- Main function.
 function DMARCcheck_main() {
+    # If the EMAIL_SECURITY_COMMON import isn't defined, then the common functions are not available. Exit!
+    [ -z "${EMAIL_SECURITY_COMMON}" ] && echo "The script could not import the required common library, and therefore could not run. Aborting." && exit 1
     # Immediately set up the trap for the cleanup function on exit.
     trap cleanup EXIT
     # Set up the environment with a clean slate, and verify passed arguments.
@@ -300,7 +302,7 @@ function outputDMARCInfo() {
     #printf "%-65s : %s \n" "Policy:" "${DMARC_ACTION}"
     printNeatly "Policy" ":" "${DMARC_ACTION}" "${SPACING}"
     printNeatly "Subdomain Policy" ":" "${DMARC_SUB_ACTION_DISPLAY}" "${SPACING}"
-    printNeatly "Percentage affected" ":" "${DMARC_PCT_DISPLAY}" "${SPACING}"
+    printNeatly "Percentage of Mail Affected" ":" "${DMARC_PCT_DISPLAY}" "${SPACING}"
     printf "DKIM Classification (ADKIM)    : "
     [[ "${DMARC_ADKIM}" == "s" ]] \
         && echo 's (strict mode; DKIM-Signature d= tag CANNOT be a subdomain of the header-from domain)' \
@@ -330,6 +332,7 @@ function checkDKIMAlignment() {
     # If dkim-verify returns a 0 code, the DKIM-Signature is valid.
     if [ -z "${SHOW_DKIM}" ]; then
         ${DKIM_VERIFY} ${EMAIL_FILE} 2>&1 >/dev/null
+        local RETCODE=$?
     else
         echo "${TC_BOLD}=============== RUNNING DKIM CHECK${TC_NORMAL}:"
         if [ -z "${NO_COLORS}" ]; then

@@ -27,6 +27,9 @@
 #  this program. If not, see https://www.gnu.org/licenses/.
 ######################################################################################
 
+# Define a global import as a 'canary' type of variable, which lets scripts know COMMON was sourced successfully.
+EMAIL_SECURITY_COMMON=1
+
 # colors
 # -- Initialize terminal colors, if enabled.
 # ---- Feeding ANY argument to this function will DISABLE colors in the terminal.
