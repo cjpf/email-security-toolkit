@@ -5,8 +5,9 @@ This script has dependencies on the **spf-verify.sh** and **dkim-verify.sh** scr
 
 ## TODO
 + [ ] More "in the wild" tests and QA for the script.
-+ [ ] Add a dependency check as needed to the script (will investigate this later).
-+ [ ] Review the hastily-written code for efficiency's sake.
++ [ ] Finish the spf-verify module and integrate it.
++ [X] Add a dependency check as needed to the script (will investigate this later).
++ [X] ~~Review the hastily-written code for efficiency's sake.~~ _November 14th, 2019_: Looks good so far. :)
 
 ## Usage
 ```
@@ -42,7 +43,7 @@ Extracted Header-From Domain: thestraightpath.email
 DMARC Record: v=DMARC1;p=reject;sp=reject;pct=100;adkim=s;aspf=s;ri=86400;fo=1;rua=mailto:postmaster@thestraightpath.email;ruf=mailto:postmaster@thestraightpath.email
 Policy                         : reject
 Subdomain Policy               : reject
-Percentage affected            : 100
+Percentage of Mail Affected    : 100
 DKIM Classification (ADKIM)    : s (strict mode; DKIM-Signature d= tag CANNOT be a subdomain of the header-from domain)
 SPF Classification (ASPF)      : s (strict mode; Envelope-From CANNOT be a subdomain of the header-from domain)
 Reporting Policy               : 1

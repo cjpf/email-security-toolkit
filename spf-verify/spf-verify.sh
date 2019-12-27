@@ -39,10 +39,14 @@
 #  this program. If not, see https://www.gnu.org/licenses/.
 ######################################################################################
 
+# Include common functions.
+source ../common/common.sh
 
 
 # main function
 function SPFVerify_main() {
+    # If the EMAIL_SECURITY_COMMON import isn't defined, then the common functions are not available. Exit!
+    [ -z "${EMAIL_SECURITY_COMMON}" ] && echo "The script could not import the required common library, and therefore could not run. Aborting." && exit 1
     # Immediately set up the trap for the cleanup function on exit.
     trap cleanup EXIT
     # Set up the environment with a clean slate, and verify passed arguments.
@@ -100,38 +104,6 @@ function usage() {
 # -- Clean up any temporary files with a trap.
 function cleanup() {
     rm -f ${RAW_HEADERS}
-}
-
-# colors
-# -- Initialize terminal colors, if enabled.
-## An optional argument of ANY value is passed to this function to disable colors altogether.
-function colors() {
-    [ -n "$1" ] && return
-    COLORS=$(tput colors 2>/dev/null)
-    if [ -n "${COLORS}" ]; then
-        TC_RED=`tput setaf 1 2>/dev/null`
-        TC_GREEN=`tput setaf 2 2>/dev/null`
-        TC_YELLOW=`tput setaf 3 2>/dev/null`
-        TC_BLUE=`tput setaf 4 2>/dev/null`
-        TC_PURPLE=`tput setaf 5 2>/dev/null`
-        TC_CYAN=`tput setaf 6 2>/dev/null`
-        TC_NORMAL=`tput sgr0 2>/dev/null`
-        TC_BOLD=`tput bold 2>/dev/null`
-    fi
-}
-
-# errorOutput
-# -- Output an error to the terminal and exit with the given code.
-# PARAMS: 1 = Accompanying string, 2 = Exit code
-function errorOutput() {
-  echo "${TC_BOLD}${TC_RED}ERROR${TC_NORMAL}: $1"
-  exit $2
-}
-
-# outputInfo
-# -- Output the given info along the way during a calculation.
-function outputInfo() {
-  echo " \`---> $1"
 }
 
 # initialize
@@ -228,7 +200,7 @@ function getSPFRecord() {
         # Retry the SPF query against a public DNS server.
         SPF_RECORD=$(dig txt +short ${QUERY_STR} @1.1.1.1 | grep -Pi '^"?v=spf1')
         [ -z "${SPF_RECORD}" ] \
-            && errorOutput "The domain ${TC_CYAN}${SPF_DOMAIN}${TC_NORMAL} does not have a valid SPF record." 3
+            && outputError "The domain ${TC_CYAN}${SPF_DOMAIN}${TC_NORMAL} does not have a valid SPF record." 3
     fi
 
     # Check for multiple SPF records. If so, warn the user and continue using the first one.

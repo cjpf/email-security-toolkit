@@ -28,6 +28,10 @@
 #  this program. If not, see https://www.gnu.org/licenses/.
 ######################################################################################
 
+# Import common functions.
+source ../common/common.sh
+
+
 
 # Script usage information.
 function usage() {
@@ -45,6 +49,7 @@ function usage() {
 SERVER=$1
 shift
 # Check for erroneous parameters and for the no-color option
+NO_COLORS=
 while getopts n param; do
   case $param in
     n) NO_COLORS="TRUE" ;;
@@ -53,15 +58,7 @@ while getopts n param; do
 done
 
 # If colors are supported and the "no-color" flag is unset, enable them.
-TC_COLORS=$(tput colors 2>/dev/null)
-if [[ -n "$TC_COLORS" && -z "$NO_COLORS" ]]; then
-  TC_RED=`tput setaf 1 2>/dev/null`
-  TC_GREEN=`tput setaf 2 2>/dev/null`
-  TC_YELLOW=`tput setaf 3 2>/dev/null`
-  TC_CYAN=`tput setaf 6 2>/dev/null`
-  TC_WHITE=`tput setaf 7 2>/dev/null`
-  TC_NORMAL=`tput sgr0 2>/dev/null`
-fi
+colors "${NO_COLORS}"
 
 # Ensuring the given argument includes a port number.
 SERVER_HAS_PORT=$(echo "$SERVER" | grep -o ':')

@@ -1,25 +1,30 @@
 # Email Security Toolkit
-Everything a consummate sysadmin or developer should ever need for troubleshooting their email issues.
+Everything a consummate administrator, developer, or otherwise security-minded individual should ever need for troubleshooting their email issues.
 
-Scripts will be added over time as I draft them. **READMEs** can be found in each directory, for each tool.
+Scripts will be added over time as they are drafted. **READMEs** can be found in each directory, for each tool, describing script parameters and other relevant information.
 
-Future implementations include the following translations of each Bash Shell script (this list may expand):
+# Looking Forward
+Future implementations tentatively include the following translations of each Bash Shell script after initial completion of the library (provided the functionality is available in the target language):
 + PowerShell
 + Perl
 + Python
-+ JavaScript (ReactJS, interactive)
++ **?** C(++)
++ ~~Java~~ Scrapped as of 2019-11-14, for absolutely no reason other than the fact that I won't ever get around to this. If the popularity of the project grows, I would love to re-examine the possibility of a Java interpretation of the modules.
++ ~~JavaScript (ReactJS, interactive)~~ This has been scrapped as of 2019-10-05, since JS doesn't quite provide any basic networking functionality beyond simple HTTP(S) requests, for good reason. Not interested in making a NodeJS or other JS-based handling server.
 
 # Ideas to Implement
-This section will host a checklist of script ideas for tools to add later, whether by suggestion, request, or brainstorming. Items are checked as the sub-project is considered in a "working" state, but of course even the checked projects will likely be revisited and updated as bugs are discovered.
+This section will host a checklist of script ideas for tools to add later, whether by suggestion, request, or brainstorming. Items are checked as the sub-project is considered in a "working" state, but of course even the checked projects will likely be _revisited and updated_ as bugs are discovered.
 
-- [ ] _email-toolkit_ - A "_master_" script to use all of the other tools below. This is just an idea right now but will help with creating a "library" file with lots of common routines/functions that I can source (`. misc/master.sh`) into other tools.
-
-- [X] _quick-dns_ - Display quick information about a domain's email security/authentication standards in place, and provide a quick RBL check against the Barracuda RBL.
-- [ ] _spf-detail_ - Return raw IPv4/6 ranges for a given domain using their SPF record, or perform a simulated SPF check with a given IP address and SMTP Envelope-From (_MAIL FROM_). Also, evaluate the general policy of the target domain's SPF record.
+- [ ] _email-toolkit_ - A "_master_" script to use all of the other tools below. ~~This is just an idea right now but will help with creating a "library" file with lots of common routines/functions that can be sourced (`. misc/master.sh`) into other tools.~~ **NOTE, 2019-11-14**: The "common" functions have been implemented, and this likely won't be desired anymore. The only use I can see for it is a "menu" that lets you select the tool you want to use.
+- [X] _quick-dns_ - Display quick information about a domain's email security/authentication standards in place, and/or provide a quick check against a predefined list of popular DNSBLs.
+- [ ] _spf-verify_ - Return raw IPv4/6 ranges for a given domain using their SPF record, or perform a simulated SPF check with a given IP address and SMTP Envelope-From (_MAIL FROM_). Also, evaluate the general policy of the target domain's SPF record.
 - [X] _dkim-verify_ - DKIM verification script. Check for body-hash failures and header signature failures, among other checks.
-- [ ] _mime-check_ - MIME header checker/analyzer. Checks for malformed MIME headers and also describes a raw email's MIME header formatting.
+- [X] _dmarc-check_ - Verify the DMARC pass/fail status of a raw email and explain the action taken as specified by the DMARC record.
+  + **NOTE**: The DMARC script _depends_ on the SPF and DKIM scripts included in this library to function properly. Please consult the _dmarc-verify_ folder for the README and more information on the project.
+- [ ] _mime-check_ - MIME header checker/analyzer. Checks for malformed MIME headers and also describes a raw email's MIME header formatting, in a view sort of like the Linux `tree` command. This would be useful for either _malformed_ messages, or simply _educational_ for the way MIME headers interact with raw messages and mail clients.
 - [ ] _received-trace_ - Received headers analysis. Show the hops and time for each MTA that passed a message. And yes, _exactly_ like the MXToolbox one but in a terminal.
-- [X] _test-ciphers_ - Test the support cipher suites of a target server using OpenSSL. This can be helpful for diagnosing SMTP over TLS issues.
+- [X] _test-ciphers_ - Test the support cipher suites of a target server and port using _OpenSSL_. This can be helpful for diagnosing [START]TLS/SSL issues.
+- **?** [ ] _arc-check_ - Check the _ARC-Seal_ of a message using the new ARC standard, to verify authentication parameters.
 
 ## General Implementations (commonalities)
 Each script will need to follow a certain combined standard to meet the portability requirements across different versions of the same operating systems. Here's a list of standards to maintain/back-fill for each tool (can be expanded later as the project grows):
