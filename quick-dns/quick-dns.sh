@@ -37,9 +37,11 @@ function quickDNS_main() {
     # Unset some variables.
     clearVars "DOMAINS MX_IP_LIST NO_COLORS V4_LOOKUP V6_LOOKUP SKIP_GET_DOMAIN PTR_RECORD FULL_IP REVERSED_IP"
 
+    # If the first parameter's 0th to 2nd characters match "-r" OR "-R", skip checking the domain names and process the -[Rr] option instead
     [[ "${1:0:2}" == "-R" || "${1:0:2}" == "-r" ]] \
         && SKIP_GET_DOMAIN="YES"
-    # The first arg to the program must be a QUOTED list of space-separated domains to check.
+
+    # The first arg to the program must be a QUOTED list of space-separated domains to check. 
     if [ -z "${SKIP_GET_DOMAIN}" ]; then
         if [[ -z "$1" || -z `echo "${1}" | grep -Poi '^([a-z0-9\.\-]+\.[a-z]{2,})(\s+[a-z0-9\.\-]+\.[a-z]{2,})*'` ]]; then
             usage
@@ -86,7 +88,7 @@ function quickDNS_main() {
 
     # Begin the main loop.
     for fqdn in ${DOMAINS[@]}; do
-        # Run the script for a domain. Start by resetting variables and then crunching the DNS.
+        # Run the script for each domain. Start by resetting variables and then crunching the DNS.
         clearVars "NAME_SERVER SPF_RECORD DMARC_RECORD MX_RECORD_OUT MX_RECORDS A_RECORD MX_IP_LIST PTR_RECORD FULL_IP REVERSED_IP"
         DOMAIN="${fqdn}"
         printBanner "${fqdn}"
@@ -159,6 +161,7 @@ function depCheck() {
 }
 
 # Clear all variables associated with the below DNS lookup/parsing functions (in the Script Modules section).
+# clearVars "VAR1 VAR2 VAR3 VAR4 VAR5"
 function clearVars() {
     for x in "$@"; do unset `echo $x`; done
 }
