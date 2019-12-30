@@ -385,7 +385,7 @@ function fallbackLookup() {
 # Counts the number of groups given in the ipv6 address
 # ARGS:
 #   $1 = IPv6 Address.
-count_groups() {
+function count_groups() {
     local groups=$(echo ${1} | tr ':' ' ' | wc -w)
     # ensure there are no more than 8 groups
     [[ ${groups} -gt 8 ]] && echo "Too Many Groups Detected" && return 1
@@ -399,7 +399,7 @@ count_groups() {
 # Only Base 16 digits and {:|::} are allowed
 # ARGS:
 #   $1 = IPv6 Address
-ip_validation() {
+function ip_validation() {
     [[ ! ${1} =~ ^[0-9a-fA-F\:]+$ || ${1} =~ [\:]{3} || $(echo ${1} | grep "::" -o | wc -l) -gt 1 ]] \
         && return 1
     # group count
@@ -412,7 +412,7 @@ ip_validation() {
 # Sets the value of ZERO_END to be the end of the zeros
 # ARGS:
 #   $1 = IPv6 Address
-find_zeros() {
+function find_zeros() {
     # group count = 8 indicates that there is no :: in the address
     if [[ ${GROUP_COUNT} -ne 8 ]]; then
         # find location of :: and save in ZERO_START variable
@@ -428,7 +428,7 @@ find_zeros() {
 
 # ARGS:
 #   $1 = IPv6 Address
-build_groups_array() {
+function build_groups_array() {
     find_zeros ${1}
     local offset=-1 # offset is used to offset cut fields after zeros have been written to the array
     # fill an indexed array with the groups
@@ -458,7 +458,7 @@ build_groups_array() {
 # ARGS:
 #   $1 = group
 #   $2 = group array index
-expand_group() {
+function expand_group() {
     local zeros_to_add=$((4-$(echo -n ${1} | wc -m)))
     for ((n=0; n < ${zeros_to_add}; n += 1)); do
         local new_group="${new_group}0"
@@ -468,24 +468,24 @@ expand_group() {
 }
 
 # Expands and delimits an IPv6 Address, then reverses it to be used for PTR lookups
-expand_address() {
+function expand_address() {
     delimit_address
     reverse_address
 }
 
 # Reverses an expanded and delimited IPv6 Address and append .ip6.arpa.
-reverse_address() {
+function reverse_address() {
     REVERSED_IP=$(echo "$(echo ${FULL_IP} | tac -s. | sed 's,.$,,').ip6.arpa." | tr -d '\n')
 }
 
 # Delimits an expanded IPv6 Address with '.'
-delimit_address() {
+function delimit_address() {
     FULL_IP=
-    # iterate over the array and concatenate each element into one string
+    # Iterate over the array and concatenate each element into one string
     for ((i=0; i < 8; i += 1)); do
         FULL_IP="${FULL_IP}${GROUPS_ARRAY[${i}]}"
     done
-    # add . between each digit
+    # Add . between each digit
     FULL_IP=$(echo ${FULL_IP} | sed 's,.,&.,g')
 }
 
