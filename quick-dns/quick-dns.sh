@@ -173,7 +173,7 @@ function clearVars() {
 # Choose the first name server returned from a DIG NS and use it for all future queries.
 # TODO: add a name-server tester to avoid delays in future lookups.
 function getNameServers() {
-    NAME_SERVER=$(dig ns ${DEFAULT_OPTIONS} ${DOMAIN} | head -1)
+    NAME_SERVER=`dig ns ${DEFAULT_OPTIONS} ${DOMAIN} | head -1`
     # Check to ensure that name-server exists and is a valid host. If not, fall back to GoogleDNS.
     [[ -z "$NAME_SERVER" || -z `host ${NAME_SERVER} | grep -Pv '(NXDOMAIN)|not found'` ]] && NAME_SERVER="8.8.8.8"
     printf "${TC_BLUE}Primary Nameserver${TC_NORMAL}: "
@@ -185,11 +185,11 @@ function getNameServers() {
 ## Keeping the "grep" below without a "head/tail" operation or pipe,
 ## to tell the user of the script if there are multiple SPF records.
 function getSPF() {
-    SPF_RECORD=$(dig txt ${DEFAULT_OPTIONS} ${DOMAIN} @${NAME_SERVER})
-    (checkFallbackLookup "$SPF_RECORD") || SPF_RECORD=$(fallbackLookup "${DOMAIN}" "txt" "1.1.1.1")
-    SPF_RECORD=$(echo "${SPF_RECORD}" | grep -i "v=spf1")
+    SPF_RECORD=`dig txt ${DEFAULT_OPTIONS} ${DOMAIN} @${NAME_SERVER}`
+    (checkFallbackLookup "$SPF_RECORD") || SPF_RECORD=`fallbackLookup "${DOMAIN}" "txt" "1.1.1.1"`
+    SPF_RECORD=`echo "${SPF_RECORD}" | grep -i "v=spf1"`
     [ -z "$SPF_RECORD" ] && SPF_RECORD="NONE"
-    if [[ $(echo ${SPF_RECORD} | wc -l) -gt 1 ]]; then
+    if [[ `echo ${SPF_RECORD} | wc -l` -gt 1 ]]; then
         echo "${TC_CYAN}WARNING${TC_NORMAL}: Multiple SPF Records Found! There should only be 1 SPF Record per domain."
         SPF_RECORD=$(echo ${SPF_RECORD} | tr '\n' ';' | sed 's,;$,,')
         oldIFS=${IFS} && IFS=';' read -ra SPF_RECORD <<< ${SPF_RECORD}
